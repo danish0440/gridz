@@ -1,9 +1,9 @@
-# GridCraft control protocol
+# GridZ control protocol
 
 Start the desktop app with a control port:
 
 ```sh
-gridcraft --control 7979            # or GRIDCRAFT_CONTROL_PORT=7979
+gridz --control 7979            # or GRIDZ_CONTROL_PORT=7979
 ```
 
 Then send newline-delimited JSON to `127.0.0.1:7979`. Every request line gets one reply line:
@@ -19,7 +19,7 @@ Errors come back as `{"id": …, "ok": false, "error": "…"}`.
 
 | Method | Params | What it does |
 |---|---|---|
-| `engine.execute` | `{command, params}` | Runs any engine command (see `engine.commands` or `gridcraft-cli commands`) |
+| `engine.execute` | `{command, params}` | Runs any engine command (see `engine.commands` or `gridz-cli commands`) |
 | `engine.commands` | `{search?}` | Every command: id, label, ribbon path, shortcut, params doc, enabled; `search` keeps those whose id, label or ribbon path contains it (case-insensitive) |
 | `engine.journal` | | Commands run so far (replayable). Passwords (`password`, `…Password` params) are left out, so a replayed Protect Sheet has no password |
 | `document.inspect` | | Workbook summary: sheets, used ranges, tables, charts, names, selection, undo labels |
@@ -63,7 +63,7 @@ password returns "The password is incorrect." The password is left out of the jo
 quoted in an error. The opened workbook has no save path, so Save asks where to save it, without
 the password, and never replaces the encrypted original.
 
-For a headless equivalent (no window), use `gridcraft-cli mcp` or `gridcraft-cli run`;
+For a headless equivalent (no window), use `gridz-cli mcp` or `gridz-cli run`;
 see [`mcp.md`](mcp.md) and [`cli.md`](cli.md).
 
 ### Native printing
@@ -79,4 +79,4 @@ false. Set `printer` to a discovered name, integer `copies` from 1 to 999, `dupl
 rejected without changing earlier settings. `ui.printSubmit` explicitly submits the current
 print-ready PDF without opening a dialog; inspect `ui.printSettings` until `busy` becomes false
 and check `status`/`detail`. The browser keeps its own print hook. PDF export remains separate.
-GridCraft accepts the existing `file.print` sheet/pagination params on `ui.printSubmit`; the engine `file.print` command returns the PDF without spooling.
+GridZ accepts the existing `file.print` sheet/pagination params on `ui.printSubmit`; the engine `file.print` command returns the PDF without spooling.

@@ -1,5 +1,5 @@
-use gridcraft_core::{CellError, CellRef, Value};
-use gridcraft_engine::Session;
+use gridz_core::{CellError, CellRef, Value};
+use gridz_engine::Session;
 use serde_json::json;
 
 #[test]

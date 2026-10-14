@@ -6,8 +6,8 @@
 
 use std::sync::Arc;
 
-use gridcraft_core::{CellRef, RangeRef};
-use gridcraft_model::*;
+use gridz_core::{CellRef, RangeRef};
+use gridz_model::*;
 use serde_json::{Value as Json, json};
 
 use super::*;
@@ -1413,7 +1413,7 @@ fn insert_pivot_chart(s: &mut Session, p: &Json) -> Result<Json> {
     let t = str_param(p, "type").unwrap_or("column");
     let kind = super::insert::chart_kind(t, str_param(p, "subtype").unwrap_or(""));
     let at =
-        cell_param(s, p, "at")?.unwrap_or_else(|| CellRef::new(area.start.row, area.end.col.saturating_add(2).min(gridcraft_core::MAX_COLS - 1)));
+        cell_param(s, p, "at")?.unwrap_or_else(|| CellRef::new(area.start.row, area.end.col.saturating_add(2).min(gridz_core::MAX_COLS - 1)));
     let title = match p.get("title") {
         Some(Json::String(t)) => Some(t.clone()),
         Some(Json::Null) => None,
@@ -1551,7 +1551,7 @@ fn recommended(s: &mut Session, p: &Json) -> Result<Json> {
 
 #[cfg(test)]
 mod tests {
-    use gridcraft_core::{CellError, CellRef, Value};
+    use gridz_core::{CellError, CellRef, Value};
     use serde_json::{Value as Json, json};
 
     use crate::Session;
@@ -1587,7 +1587,7 @@ mod tests {
     fn text(s: &Session, a: &str) -> String {
         val(s, a).display()
     }
-    fn pt(s: &Session) -> gridcraft_model::PivotTable {
+    fn pt(s: &Session) -> gridz_model::PivotTable {
         s.doc().unwrap().wb.active().unwrap().pivots.last().unwrap().clone()
     }
     /// Finds the row (0-based) whose first report column holds `label`.
@@ -1982,12 +1982,12 @@ mod tests {
         s.execute("pivot.refresh", json!({"pivot": "PivotTable1"})).unwrap();
     }
 
-    fn pivot_chart(s: &Session) -> gridcraft_model::Chart {
+    fn pivot_chart(s: &Session) -> gridz_model::Chart {
         s.doc().unwrap().wb.active().unwrap().charts.last().unwrap().clone()
     }
     fn plotted(s: &Session) -> Vec<Vec<Option<f64>>> {
         let d = s.doc().unwrap();
-        let data = gridcraft_chart::resolve(&d.wb, d.wb.active_sheet, &pivot_chart(s));
+        let data = gridz_chart::resolve(&d.wb, d.wb.active_sheet, &pivot_chart(s));
         data.series.into_iter().map(|x| x.values).collect()
     }
 
@@ -2019,7 +2019,7 @@ mod tests {
         assert_eq!(pts[0].iter().flatten().sum::<f64>(), TOTAL);
         // Survives an XLSX round trip as a PivotChart.
         let wb = (*s.doc().unwrap().wb).clone();
-        let (back, _) = gridcraft_xlsx::read_xlsx(&gridcraft_xlsx::write_xlsx(&wb).unwrap()).unwrap();
+        let (back, _) = gridz_xlsx::read_xlsx(&gridz_xlsx::write_xlsx(&wb).unwrap()).unwrap();
         let si = back.sheet_index("Sheet2").unwrap();
         assert_eq!(back.sheet(si).unwrap().charts.first().and_then(|c| c.pivot.clone()).as_deref(), Some("Sheet2!PivotTable1"));
         // Renaming the sheet keeps the link; a refresh still rebinds.
@@ -2045,7 +2045,7 @@ mod tests {
         let r = s.execute("insert.pivotChart", json!({"pivot": "PivotTable1", "type": "line", "title": null})).unwrap();
         assert_eq!(r["series"], 1);
         let ch = pivot_chart(&s);
-        assert_eq!(ch.kind, gridcraft_model::ChartKind::Line);
+        assert_eq!(ch.kind, gridz_model::ChartKind::Line);
         assert_eq!(ch.title, None);
         // One undo step.
         s.execute("edit.undo", json!({})).unwrap();

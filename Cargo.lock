@@ -1495,7 +1495,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft"
+name = "gridz"
 version = "0.6.1"
 dependencies = [
  "arboard",
@@ -1503,8 +1503,8 @@ dependencies = [
  "eframe",
  "egui",
  "fmv-macos-events",
- "gridcraft-engine",
- "gridcraft-ui-egui",
+ "gridz-engine",
+ "gridz-ui-egui",
  "image",
  "log",
  "muda",
@@ -1517,34 +1517,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-calc"
+name = "gridz-calc"
 version = "0.6.1"
 dependencies = [
- "gridcraft-core",
- "gridcraft-formula",
- "gridcraft-functions",
- "gridcraft-model",
- "gridcraft-numfmt",
+ "gridz-core",
+ "gridz-formula",
+ "gridz-functions",
+ "gridz-model",
+ "gridz-numfmt",
  "log",
 ]
 
 [[package]]
-name = "gridcraft-chart"
+name = "gridz-chart"
 version = "0.6.1"
 dependencies = [
- "gridcraft-calc",
- "gridcraft-core",
- "gridcraft-model",
- "gridcraft-numfmt",
+ "gridz-calc",
+ "gridz-core",
+ "gridz-model",
+ "gridz-numfmt",
  "serde",
 ]
 
 [[package]]
-name = "gridcraft-cli"
+name = "gridz-cli"
 version = "0.6.1"
 dependencies = [
- "gridcraft-engine",
- "gridcraft-mcp",
+ "gridz-engine",
+ "gridz-mcp",
  "log",
  "quick-xml",
  "serde_json",
@@ -1552,7 +1552,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-core"
+name = "gridz-core"
 version = "0.6.1"
 dependencies = [
  "js-sys",
@@ -1562,18 +1562,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-engine"
+name = "gridz-engine"
 version = "0.6.1"
 dependencies = [
- "gridcraft-calc",
- "gridcraft-chart",
- "gridcraft-core",
- "gridcraft-formula",
- "gridcraft-functions",
- "gridcraft-model",
- "gridcraft-numfmt",
- "gridcraft-pdf",
- "gridcraft-xlsx",
+ "gridz-calc",
+ "gridz-chart",
+ "gridz-core",
+ "gridz-formula",
+ "gridz-functions",
+ "gridz-model",
+ "gridz-numfmt",
+ "gridz-pdf",
+ "gridz-xlsx",
  "image",
  "log",
  "serde",
@@ -1583,37 +1583,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-formula"
+name = "gridz-formula"
 version = "0.6.1"
 dependencies = [
- "gridcraft-core",
+ "gridz-core",
  "serde",
  "thiserror 2.0.21",
 ]
 
 [[package]]
-name = "gridcraft-functions"
+name = "gridz-functions"
 version = "0.6.1"
 dependencies = [
- "gridcraft-core",
+ "gridz-core",
  "regex",
 ]
 
 [[package]]
-name = "gridcraft-mcp"
+name = "gridz-mcp"
 version = "0.6.1"
 dependencies = [
- "gridcraft-engine",
+ "gridz-engine",
  "log",
  "serde_json",
 ]
 
 [[package]]
-name = "gridcraft-model"
+name = "gridz-model"
 version = "0.6.1"
 dependencies = [
- "gridcraft-core",
- "gridcraft-formula",
+ "gridz-core",
+ "gridz-formula",
  "serde",
  "serde_json",
  "sha2",
@@ -1621,27 +1621,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-numfmt"
+name = "gridz-numfmt"
 version = "0.6.1"
 dependencies = [
- "gridcraft-core",
+ "gridz-core",
 ]
 
 [[package]]
-name = "gridcraft-pdf"
+name = "gridz-pdf"
 version = "0.6.1"
 
 [[package]]
-name = "gridcraft-ui-egui"
+name = "gridz-ui-egui"
 version = "0.6.1"
 dependencies = [
  "craft-ui",
  "egui",
  "egui_kittest",
  "epaint_default_fonts",
- "gridcraft-chart",
- "gridcraft-engine",
- "gridcraft-xlsx",
+ "gridz-chart",
+ "gridz-engine",
+ "gridz-xlsx",
  "image",
  "log",
  "serde",
@@ -1654,13 +1654,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-web"
+name = "gridz-web"
 version = "0.6.1"
 dependencies = [
  "eframe",
  "egui",
- "gridcraft-engine",
- "gridcraft-ui-egui",
+ "gridz-engine",
+ "gridz-ui-egui",
  "js-sys",
  "log",
  "rfd",
@@ -1671,13 +1671,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "gridcraft-xlsx"
+name = "gridz-xlsx"
 version = "0.6.1"
 dependencies = [
  "aes",
- "gridcraft-core",
- "gridcraft-formula",
- "gridcraft-model",
+ "gridz-core",
+ "gridz-formula",
+ "gridz-model",
  "quick-xml",
  "sha1",
  "sha2",
@@ -4528,7 +4528,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 name = "xtask"
 version = "0.6.1"
 dependencies = [
- "gridcraft-engine",
+ "gridz-engine",
  "serde_json",
 ]
 

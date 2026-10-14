@@ -1,17 +1,17 @@
 [package]
-name = "gridcraft-model"
+name = "gridz-model"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "GridCraft document model: workbooks, sheets, cells, styles, tables, charts"
+description = "GridZ document model: workbooks, sheets, cells, styles, tables, charts"
 
 [lints]
 workspace = true
 
 [dependencies]
-gridcraft-core = { workspace = true }
+gridz-core = { workspace = true }
 sha2 = { workspace = true }
-gridcraft-formula = { workspace = true }
+gridz-formula = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

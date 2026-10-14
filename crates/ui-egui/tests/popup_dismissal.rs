@@ -2,9 +2,9 @@
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, pos2};
 use egui_kittest::kittest::Queryable;
-use gridcraft_engine::Session;
-use gridcraft_engine::core::{CellRef, Value};
-use gridcraft_ui_egui::{SheetApp, grid};
+use gridz_engine::Session;
+use gridz_engine::core::{CellRef, Value};
+use gridz_ui_egui::{SheetApp, grid};
 use serde_json::json;
 
 type Harness = egui_kittest::Harness<'static, SheetApp>;

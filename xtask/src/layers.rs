@@ -24,7 +24,7 @@ impl Class {
 }
 
 /// The layering table (AGENTS.md "Layering", plan/architecture.md). Names are package names
-/// without the `gridcraft-` prefix.
+/// without the `gridz-` prefix.
 pub const TABLE: &[(&str, Class)] = &[
     ("core", Class::Layer(0)),
     ("numfmt", Class::Layer(0)),
@@ -39,7 +39,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("ui-egui", Class::Layer(6)),
     ("mcp", Class::Layer(6)),
     // L7 apps (exempt) and tooling (unchecked)
-    ("gridcraft", Class::Layer(7)),
+    ("gridz", Class::Layer(7)),
     ("cli", Class::Layer(7)),
     ("web", Class::Layer(7)),
     ("xtask", Class::Exempt),
@@ -69,7 +69,7 @@ pub const UI_CRATES: &[&str] = &["egui*", "eframe", "winit", "rfd", "wgpu*"];
 pub const UI_MIN_LAYER: u8 = 6;
 
 pub fn short_name(pkg: &str) -> &str {
-    pkg.strip_prefix("gridcraft-").unwrap_or(pkg)
+    pkg.strip_prefix("gridz-").unwrap_or(pkg)
 }
 
 pub fn classify(pkg: &str) -> Option<Class> {
@@ -224,85 +224,85 @@ mod tests {
     #[test]
     fn clean_downward_graph_passes() {
         let g = [
-            c("gridcraft-core", &[("serde", Normal, false)]),
-            c("gridcraft-numfmt", &[("gridcraft-core", Normal, true)]),
-            c("gridcraft-formula", &[("gridcraft-core", Normal, true)]),
-            c("gridcraft-functions", &[("gridcraft-core", Normal, true), ("gridcraft-formula", Normal, true)]),
-            c("gridcraft-model", &[("gridcraft-formula", Normal, true)]),
-            c("gridcraft-calc", &[("gridcraft-model", Normal, true), ("gridcraft-functions", Normal, true), ("gridcraft-numfmt", Normal, true)]),
-            c("gridcraft-xlsx", &[("gridcraft-core", Normal, true), ("gridcraft-formula", Normal, true), ("gridcraft-model", Normal, true)]),
-            c("gridcraft-chart", &[("gridcraft-model", Normal, true)]),
-            c("gridcraft-engine", &[("gridcraft-calc", Normal, true), ("gridcraft-xlsx", Normal, true), ("gridcraft-chart", Normal, true)]),
-            c("gridcraft-ui-egui", &[("gridcraft-engine", Normal, true), ("egui", Normal, false), ("wgpu", Normal, false)]),
-            c("gridcraft-cli", &[("gridcraft-ui-egui", Normal, true), ("gridcraft-mcp", Normal, true)]),
+            c("gridz-core", &[("serde", Normal, false)]),
+            c("gridz-numfmt", &[("gridz-core", Normal, true)]),
+            c("gridz-formula", &[("gridz-core", Normal, true)]),
+            c("gridz-functions", &[("gridz-core", Normal, true), ("gridz-formula", Normal, true)]),
+            c("gridz-model", &[("gridz-formula", Normal, true)]),
+            c("gridz-calc", &[("gridz-model", Normal, true), ("gridz-functions", Normal, true), ("gridz-numfmt", Normal, true)]),
+            c("gridz-xlsx", &[("gridz-core", Normal, true), ("gridz-formula", Normal, true), ("gridz-model", Normal, true)]),
+            c("gridz-chart", &[("gridz-model", Normal, true)]),
+            c("gridz-engine", &[("gridz-calc", Normal, true), ("gridz-xlsx", Normal, true), ("gridz-chart", Normal, true)]),
+            c("gridz-ui-egui", &[("gridz-engine", Normal, true), ("egui", Normal, false), ("wgpu", Normal, false)]),
+            c("gridz-cli", &[("gridz-ui-egui", Normal, true), ("gridz-mcp", Normal, true)]),
         ];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
     }
 
     #[test]
     fn upward_dependency_flagged() {
-        let v = check(&[c("gridcraft-formula", &[("gridcraft-engine", Normal, true)])]);
+        let v = check(&[c("gridz-formula", &[("gridz-engine", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 1, to: 5, .. }]));
     }
 
     #[test]
     fn sideways_dependency_flagged() {
-        let v = check(&[c("gridcraft-xlsx", &[("gridcraft-calc", Normal, true)])]);
+        let v = check(&[c("gridz-xlsx", &[("gridz-calc", Normal, true)])]);
         assert!(v.iter().any(|x| matches!(x, Violation::Upward { from: 2, to: 2, .. })), "{v:?}");
-        let v = check(&[c("gridcraft-ui-egui", &[("gridcraft-mcp", Normal, true)])]);
+        let v = check(&[c("gridz-ui-egui", &[("gridz-mcp", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 6, to: 6, .. }]));
     }
 
     #[test]
     fn intra_layer_chains_allowed_one_way() {
-        assert!(check(&[c("gridcraft-numfmt", &[("gridcraft-core", Normal, true)])]).is_empty());
-        let v = check(&[c("gridcraft-core", &[("gridcraft-numfmt", Normal, true)])]);
+        assert!(check(&[c("gridz-numfmt", &[("gridz-core", Normal, true)])]).is_empty());
+        let v = check(&[c("gridz-core", &[("gridz-numfmt", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 0, to: 0, .. }]));
-        assert!(check(&[c("gridcraft-calc", &[("gridcraft-model", Normal, true)])]).is_empty());
-        assert!(!check(&[c("gridcraft-model", &[("gridcraft-calc", Normal, true)])]).is_empty());
-        assert!(!check(&[c("gridcraft-calc", &[("gridcraft-xlsx", Normal, true)])]).is_empty());
+        assert!(check(&[c("gridz-calc", &[("gridz-model", Normal, true)])]).is_empty());
+        assert!(!check(&[c("gridz-model", &[("gridz-calc", Normal, true)])]).is_empty());
+        assert!(!check(&[c("gridz-calc", &[("gridz-xlsx", Normal, true)])]).is_empty());
     }
 
     #[test]
     fn format_crate_limited_to_core_formula_model() {
-        let v = check(&[c("gridcraft-xlsx", &[("gridcraft-numfmt", Normal, true)])]);
-        assert!(matches!(&v[..], [Violation::FormatDep { dep, .. }] if dep == "gridcraft-numfmt"), "{v:?}");
+        let v = check(&[c("gridz-xlsx", &[("gridz-numfmt", Normal, true)])]);
+        assert!(matches!(&v[..], [Violation::FormatDep { dep, .. }] if dep == "gridz-numfmt"), "{v:?}");
         // Dev-dependencies (round-trip tests through the calculator, say) are allowed if lower.
-        assert!(check(&[c("gridcraft-xlsx", &[("gridcraft-numfmt", Dev, true)])]).is_empty());
+        assert!(check(&[c("gridz-xlsx", &[("gridz-numfmt", Dev, true)])]).is_empty());
     }
 
     #[test]
     fn self_dev_dependency_ignored() {
-        assert!(check(&[c("gridcraft-model", &[("gridcraft-model", Dev, true)])]).is_empty());
+        assert!(check(&[c("gridz-model", &[("gridz-model", Dev, true)])]).is_empty());
     }
 
     #[test]
     fn upward_dev_dependency_flagged() {
-        let v = check(&[c("gridcraft-core", &[("gridcraft-model", Dev, true)])]);
+        let v = check(&[c("gridz-core", &[("gridz-model", Dev, true)])]);
         assert!(matches!(v[..], [Violation::Upward { kind: Dev, .. }]));
     }
 
     #[test]
     fn ui_crates_below_l6_flagged() {
         for dep in ["egui", "eframe", "winit", "egui_kittest", "egui_extras", "rfd", "wgpu", "wgpu-core"] {
-            let v = check(&[c("gridcraft-engine", &[(dep, Normal, false)])]);
+            let v = check(&[c("gridz-engine", &[(dep, Normal, false)])]);
             assert!(matches!(v[..], [Violation::UiBelowL6 { layer: 5, .. }]), "{dep}");
         }
-        assert!(check(&[c("gridcraft-engine", &[("serde", Normal, false)])]).is_empty());
-        assert!(check(&[c("gridcraft-mcp", &[("winit", Normal, false)])]).is_empty());
+        assert!(check(&[c("gridz-engine", &[("serde", Normal, false)])]).is_empty());
+        assert!(check(&[c("gridz-mcp", &[("winit", Normal, false)])]).is_empty());
     }
 
     #[test]
     fn unregistered_crate_is_error() {
-        let v = check(&[c("gridcraft-mystery", &[])]);
-        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "gridcraft-mystery"));
+        let v = check(&[c("gridz-mystery", &[])]);
+        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "gridz-mystery"));
         assert!(v[0].to_string().contains("register"));
     }
 
     #[test]
     fn apps_and_xtask_exempt() {
-        for app in ["gridcraft", "gridcraft-cli", "gridcraft-web", "xtask"] {
-            assert!(check(&[c(app, &[("egui", Normal, false), ("gridcraft-ui-egui", Normal, true)])]).is_empty());
+        for app in ["gridz", "gridz-cli", "gridz-web", "xtask"] {
+            assert!(check(&[c(app, &[("egui", Normal, false), ("gridz-ui-egui", Normal, true)])]).is_empty());
         }
     }
 
@@ -310,17 +310,17 @@ mod tests {
     fn metadata_parsing() {
         let meta: Value = serde_json::from_str(
             r#"{"packages":[
-                {"name":"gridcraft-model","dependencies":[
-                    {"name":"gridcraft-core","kind":null,"path":"/x/crates/core"},
+                {"name":"gridz-model","dependencies":[
+                    {"name":"gridz-core","kind":null,"path":"/x/crates/core"},
                     {"name":"serde","kind":null},
                     {"name":"proptest","kind":"dev"}]},
-                {"name":"gridcraft-core","dependencies":[]}
+                {"name":"gridz-core","dependencies":[]}
             ]}"#,
         )
         .unwrap();
         let g = from_metadata(&meta).unwrap();
         assert_eq!(g.len(), 2);
-        let model = g.iter().find(|c| c.name == "gridcraft-model").unwrap();
+        let model = g.iter().find(|c| c.name == "gridz-model").unwrap();
         assert!(model.deps[0].workspace && !model.deps[1].workspace);
         assert_eq!(model.deps[2].kind, Dev);
         assert!(check(&g).is_empty());

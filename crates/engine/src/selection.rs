@@ -1,7 +1,7 @@
 //! Cell selection: one or more ranges with an active cell.
 
-use gridcraft_core::{CellRef, MAX_COLS, MAX_ROWS, RangeRef};
-use gridcraft_model::Sheet;
+use gridz_core::{CellRef, MAX_COLS, MAX_ROWS, RangeRef};
+use gridz_model::Sheet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -219,7 +219,7 @@ pub fn current_region(sheet: &Sheet, c: CellRef) -> RangeRef {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gridcraft_core::Value;
+    use gridz_core::Value;
 
     #[test]
     fn jumps() {

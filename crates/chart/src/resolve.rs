@@ -1,9 +1,9 @@
 //! Pulls chart data (names, categories, values, formats, colours) out of a workbook.
 
-use gridcraft_calc::evaluate;
-use gridcraft_core::{CellRef, RangeRef, Value, number_to_text};
-use gridcraft_model::{Chart, ChartKind, Theme, Workbook, style::apply_tint};
-use gridcraft_numfmt::{NumberFormat, format_value};
+use gridz_calc::evaluate;
+use gridz_core::{CellRef, RangeRef, Value, number_to_text};
+use gridz_model::{Chart, ChartKind, Theme, Workbook, style::apply_tint};
+use gridz_numfmt::{NumberFormat, format_value};
 
 use crate::{ChartData, Rgba, SeriesData, TrendlineData};
 

@@ -1,29 +1,29 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
-default-members = ["crates/*", "apps/gridcraft", "apps/gridcraft-cli", "xtask"]
+default-members = ["crates/*", "apps/gridz", "apps/gridz-cli", "xtask"]
 
 [workspace.package]
 version = "0.6.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.90"
-repository = "https://github.com/storytold/gridcraft"
+repository = "https://github.com/danish0440/gridz"
 
 [workspace.dependencies]
 # internal
-gridcraft-core = { path = "crates/core" }
-gridcraft-numfmt = { path = "crates/numfmt" }
-gridcraft-formula = { path = "crates/formula" }
-gridcraft-functions = { path = "crates/functions" }
-gridcraft-model = { path = "crates/model" }
-gridcraft-calc = { path = "crates/calc" }
-gridcraft-xlsx = { path = "crates/xlsx" }
-gridcraft-chart = { path = "crates/chart" }
-gridcraft-engine = { path = "crates/engine" }
-gridcraft-ui-egui = { path = "crates/ui-egui" }
-gridcraft-mcp = { path = "crates/mcp" }
-gridcraft-pdf = { path = "crates/pdf" }
+gridz-core = { path = "crates/core" }
+gridz-numfmt = { path = "crates/numfmt" }
+gridz-formula = { path = "crates/formula" }
+gridz-functions = { path = "crates/functions" }
+gridz-model = { path = "crates/model" }
+gridz-calc = { path = "crates/calc" }
+gridz-xlsx = { path = "crates/xlsx" }
+gridz-chart = { path = "crates/chart" }
+gridz-engine = { path = "crates/engine" }
+gridz-ui-egui = { path = "crates/ui-egui" }
+gridz-mcp = { path = "crates/mcp" }
+gridz-pdf = { path = "crates/pdf" }
 
 # foundation
 thiserror = "2"

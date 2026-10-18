@@ -1496,7 +1496,7 @@ dependencies = [
 
 [[package]]
 name = "gridz"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "arboard",
  "craft-print",
@@ -1518,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-calc"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-core",
  "gridz-formula",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-chart"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-calc",
  "gridz-core",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-cli"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-engine",
  "gridz-mcp",
@@ -1553,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-core"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "js-sys",
  "serde",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-engine"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-calc",
  "gridz-chart",
@@ -1584,7 +1584,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-formula"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-core",
  "serde",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-functions"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-core",
  "regex",
@@ -1601,7 +1601,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-mcp"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-engine",
  "log",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-model"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-core",
  "gridz-formula",
@@ -1622,18 +1622,18 @@ dependencies = [
 
 [[package]]
 name = "gridz-numfmt"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-core",
 ]
 
 [[package]]
 name = "gridz-pdf"
-version = "0.6.1"
+version = "0.8.0"
 
 [[package]]
 name = "gridz-ui-egui"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "craft-ui",
  "egui",
@@ -1655,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-web"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "eframe",
  "egui",
@@ -1672,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "gridz-xlsx"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "aes",
  "gridz-core",
@@ -4526,7 +4526,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.6.1"
+version = "0.8.0"
 dependencies = [
  "gridz-engine",
  "serde_json",

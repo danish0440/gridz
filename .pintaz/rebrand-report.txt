@@ -1,6 +1,6 @@
 rebrand gridcraft -> GridZ
-about credit inserted in: ['crates/ui-egui/src/dialogs.rs (fallback, after line 1487)']
+about credit inserted in: ['crates/ui-egui/src/dialogs.rs (fallback, after line 1744)']
 launcher patches: []
 lines still naming ArtCraft/getartcraft/discord (non-doc): 2
-crates/ui-egui/src/dialogs.rs:1488: // PINTAZ-ABOUT: required credit (Apache-2.0 change notice; ArtCraft brand licence)
-crates/ui-egui/src/dialogs.rs:1490: ui.label("Based on GridCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.");
+crates/ui-egui/src/dialogs.rs:1745: // PINTAZ-ABOUT: required credit (Apache-2.0 change notice; ArtCraft brand licence)
+crates/ui-egui/src/dialogs.rs:1747: ui.label("Based on GridCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.");

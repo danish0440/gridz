@@ -13,6 +13,9 @@
   install side by side instead of replacing the old version.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <?ifndef HasCraftFontLicences ?>
+  <?define HasCraftFontLicences=0 ?>
+  <?endif ?>
   <Package
       Name="GridZ"
       Manufacturer="Learning Machines LLC"
@@ -154,11 +157,19 @@
     <StandardDirectory Id="DesktopFolder" />
 
     <Feature Id="Main" Title="GridZ" Level="1">
+      <?if $(var.HasCraftFontLicences) = 1 ?>
+      <ComponentGroupRef Id="CraftFontLicences" />
+      <?endif ?>
       <ComponentGroupRef Id="GridzFiles" />
     </Feature>
   </Package>
 
   <Fragment>
+    <?if $(var.HasCraftFontLicences) = 1 ?>
+    <ComponentGroup Id="CraftFontLicences" Directory="INSTALLFOLDER">
+      <Files Include="$(var.DocsDir)\**" />
+    </ComponentGroup>
+    <?endif ?>
     <ComponentGroup Id="GridzFiles" Directory="INSTALLFOLDER">
       <Component Id="GridzApp" Guid="C6A9C860-993B-52F5-8DD4-40D24E69EBED">
         <File Id="GridzExe" Source="$(var.BinDir)\gridz.exe" KeyPath="yes">

@@ -49,6 +49,8 @@ modules:
       - install -Dm644 packaging/linux/com.pintaz.gridz.desktop /app/share/applications/com.pintaz.gridz.desktop
       - install -Dm644 packaging/linux/com.pintaz.gridz.mime.xml /app/share/mime/packages/com.pintaz.gridz.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/
+      - install -Dm644 NOTICE /app/share/doc/gridz/NOTICE
+      - install -Dm644 ATTRIBUTION.md /app/share/doc/gridz/ATTRIBUTION.md
       - >-
         version=$(awk '/^\[/{p=($0=="[workspace.package]");next} p&&$1=="version"{gsub(/[" ]/,"",$3);print $3;exit}' Cargo.toml);
         install -d /app/share/metainfo;

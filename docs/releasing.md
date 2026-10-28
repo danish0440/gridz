@@ -122,7 +122,9 @@ open dist/release/gridz-*-macos-*.dmg
 is GUI, `gridz-cli.exe` console), signs both executables, builds the MSI with WiX v5, signs
 the MSI, and zips a portable build.
 
-- `gridz.wxs`: per-machine install into Program Files, advertised Start Menu shortcut, App
+- `gridz.wxs`: a dual-scope package (per-user by default into
+  `%LOCALAPPDATA%\Programs\ArtCraft\GridZ`, per-machine into `Program Files\ArtCraft\GridZ` (`Program Files (x86)` for the 32-bit build),
+  see `packaging/windows/INSTALLATION.md`), advertised Start Menu shortcut, App
   Paths (Win+R `gridz`). File types: ProgIds `GridZ.Workbook` (`.xlsx`, `.xlsm`) and
   `GridZ.TextData` (`.csv`, `.tsv`), listed under each extension's `OpenWithProgids` and
   in `Capabilities` + `RegisteredApplications`, so GridZ appears in *Open with* and

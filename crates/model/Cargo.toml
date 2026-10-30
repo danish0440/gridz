@@ -13,7 +13,5 @@ gridz-core = { workspace = true }
 sha2 = { workspace = true }
 gridz-formula = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+thiserror = { workspace = true }

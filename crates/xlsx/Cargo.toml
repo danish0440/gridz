@@ -16,10 +16,18 @@ test-support = []
 [dependencies]
 gridz-core = { workspace = true }
 gridz-formula = { workspace = true }
+gridz-math = { workspace = true }
 gridz-model = { workspace = true }
+craft-cfb = { workspace = true }
+craft-csv = { workspace = true }
+craft-offcrypto = { workspace = true }
+craft-opc = { workspace = true }
+craft-xls = { workspace = true }
 thiserror = { workspace = true }
 quick-xml = { workspace = true }
 zip = { workspace = true }
-aes = { workspace = true }
-sha1 = { workspace = true }
 sha2 = { workspace = true }
+
+[dev-dependencies]
+# Every registered function name, for the formula file-spelling test.
+gridz-functions = { workspace = true }

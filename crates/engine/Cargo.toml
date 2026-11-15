@@ -17,11 +17,14 @@ gridz-model = { workspace = true }
 gridz-calc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+web-time = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 gridz-xlsx = { workspace = true }
+craft-csv = { workspace = true }
 gridz-chart = { workspace = true }
 gridz-pdf = { workspace = true }
+gridz-math = { workspace = true }
 image = { workspace = true }
 
 [dev-dependencies]

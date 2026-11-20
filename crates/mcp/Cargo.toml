@@ -9,6 +9,7 @@ description = "GridZ MCP server: JSON-RPC 2.0 over stdio, driving a running app 
 workspace = true
 
 [dependencies]
+craft-mcp-server = { workspace = true }
 gridz-engine = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

@@ -1,0 +1,150 @@
+{
+  "id": "gridz",
+  "name": "GridZ",
+  "upgradeCode": "5511327B-F305-41BE-92D0-EB84944E7C4D",
+  "sources": [
+    "gridz.wxs"
+  ],
+  "icon": "assets/app-icon/gridz.ico",
+  "localization": [],
+  "extensions": [],
+  "payloads": [
+    "gridz-cli.exe",
+    "gridz.exe"
+  ],
+  "registry": [
+    [
+      "-1",
+      "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\gridz.exe",
+      "",
+      "[#GridzExe]"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.Workbook",
+      "",
+      "GridZ Workbook"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.Workbook\\DefaultIcon",
+      "",
+      "\"[#GridzExe]\",0"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.Workbook\\shell\\open\\command",
+      "",
+      "\"[#GridzExe]\" \"%1\""
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.TextData",
+      "",
+      "GridZ Text Data"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.TextData\\DefaultIcon",
+      "",
+      "\"[#GridzExe]\",0"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\GridZ.TextData\\shell\\open\\command",
+      "",
+      "\"[#GridzExe]\" \"%1\""
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.xlsx\\OpenWithProgids",
+      "GridZ.Workbook",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.xlsm\\OpenWithProgids",
+      "GridZ.Workbook",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.xlsb\\OpenWithProgids",
+      "GridZ.Workbook",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.ods\\OpenWithProgids",
+      "GridZ.Workbook",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.csv\\OpenWithProgids",
+      "GridZ.TextData",
+      "GridZ.TextData"
+    ],
+    [
+      "-1",
+      "Software\\Classes\\.tsv\\OpenWithProgids",
+      "GridZ.TextData",
+      "GridZ.TextData"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities",
+      "ApplicationName",
+      "GridZ"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities",
+      "ApplicationDescription",
+      "Open-source spreadsheet for .xlsx, CSV and TSV files"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities\\FileAssociations",
+      ".xlsx",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities\\FileAssociations",
+      ".xlsm",
+      "GridZ.Workbook"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities\\FileAssociations",
+      ".csv",
+      "GridZ.TextData"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Capabilities\\FileAssociations",
+      ".tsv",
+      "GridZ.TextData"
+    ],
+    [
+      "-1",
+      "Software\\RegisteredApplications",
+      "GridZ",
+      "Software\\GridZ\\Capabilities"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Installer",
+      "DesktopShortcut",
+      "[DESKTOPSHORTCUT]"
+    ],
+    [
+      "-1",
+      "Software\\GridZ\\Installer",
+      "DesktopShortcutComponent",
+      "#1"
+    ]
+  ],
+  "mode": "dualScope"
+}

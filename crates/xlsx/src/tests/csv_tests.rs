@@ -1,8 +1,8 @@
-use gridz_core::{CellRef, DateSystem, Value};
+use gridz_core::{CellRef, DateSystem, MAX_COLS, Value};
 use gridz_model::{Sheet, Workbook};
 
-use crate::csv::{decode_text, sniff_delimiter};
-use crate::{CsvOptions, Format, IoError, read_csv, sniff, write_csv, write_csv_limited};
+use crate::{CsvOptions, Format, IoError, read_csv, read_csv_with_report, sniff, write_csv, write_csv_limited};
+use craft_csv::{decode_text, parse_records, sniff_delimiter};
 
 fn v(wb: &Workbook, r: u32, c: u32) -> Value {
     wb.sheet(0).unwrap().value(CellRef::new(r, c))
@@ -21,6 +21,86 @@ fn quoting_and_newlines() {
     assert_eq!(v(&wb, 1, 2), Value::Number(3.0));
     assert_eq!(v(&wb, 2, 0), Value::Empty);
     assert_eq!(v(&wb, 3, 0), Value::text("last"));
+}
+
+fn date(y: i64, m: i64, d: i64) -> Value {
+    Value::Number(gridz_core::date::serial_from_ymd(DateSystem::D1900, y, m, d).unwrap())
+}
+
+#[test]
+fn day_first_columns_read_ambiguous_dates_day_first() {
+    let src = "CustomerID,Name,City,SignupDate,RenewalDate,CardNumber,Balance\n\
+        00123,Zoë Ångström,Malmö,03/04/2026,25/12/2026,4111111111111111,1234.50\n\
+        00456,José Núñez,São Paulo,12/01/2026,01/02/2027,5500005555555559,99.90\n\
+        00789,Françoise Lefèvre,Besançon,31/05/2026,30/11/2026,4012888888881881,0.00\n\
+        01000,Jürgen Weiß,Köln,07/08/2026,13/09/2026,3530111333300000,-15.25\n";
+    let (wb, report) = read_csv_with_report(src.as_bytes(), &CsvOptions::default()).unwrap();
+    // A value that reads only day first (31/05, 25/12) makes the whole column day first.
+    assert_eq!(v(&wb, 1, 3), date(2026, 4, 3));
+    assert_eq!(v(&wb, 2, 3), date(2026, 1, 12));
+    assert_eq!(v(&wb, 3, 3), date(2026, 5, 31));
+    assert_eq!(v(&wb, 4, 3), date(2026, 8, 7));
+    assert_eq!(v(&wb, 1, 4), date(2026, 12, 25));
+    assert_eq!(v(&wb, 2, 4), date(2027, 2, 1));
+    assert_eq!(v(&wb, 3, 4), date(2026, 11, 30));
+    assert_eq!(v(&wb, 4, 4), date(2026, 9, 13));
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+#[test]
+fn month_first_columns_keep_month_first_without_a_warning() {
+    let (wb, report) = read_csv_with_report(b"When\n12/31/2026\n01/02/2027\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), date(2026, 12, 31));
+    assert_eq!(v(&wb, 2, 0), date(2027, 1, 2));
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+#[test]
+fn an_all_ambiguous_date_column_keeps_month_first_and_warns() {
+    let (wb, report) = read_csv_with_report(b"When\n03/04/2026\n12/01/2026\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), date(2026, 3, 4));
+    assert_eq!(v(&wb, 2, 0), date(2026, 12, 1));
+    assert!(report.warnings.iter().any(|w| w.contains("column A") && w.contains("ambiguous")), "{:?}", report.warnings);
+    // Keeping every field as text reads no dates, so there is no order to guess.
+    let (_, report) = read_csv_with_report(b"When\n03/04/2026\n12/01/2026\n", &CsvOptions { parse_values: false, ..Default::default() }).unwrap();
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+#[test]
+fn a_column_with_both_orders_keeps_its_dates_as_text_and_warns() {
+    let (wb, report) = read_csv_with_report(b"When\n31/05/2026\n12/31/2026\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), Value::text("31/05/2026"));
+    assert_eq!(v(&wb, 2, 0), Value::text("12/31/2026"));
+    assert!(report.warnings.iter().any(|w| w.contains("column A") && w.contains("both day-first and month-first")), "{:?}", report.warnings);
+}
+
+#[test]
+fn dashes_and_two_digit_years_follow_the_column_order() {
+    let (wb, report) = read_csv_with_report(b"When\n31-05-26\n03-04-26\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), date(2026, 5, 31));
+    assert_eq!(v(&wb, 2, 0), date(2026, 4, 3));
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+
+    let (wb, report) = read_csv_with_report(b"When\n12-31-26\n01-02-27\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), date(2026, 12, 31));
+    assert_eq!(v(&wb, 2, 0), date(2027, 1, 2));
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+#[test]
+fn a_day_first_date_and_time_is_read_day_first() {
+    let (wb, report) = read_csv_with_report(b"When\n31/05/2026 10:30\n03/04/2026 10:30\n", &CsvOptions::default()).unwrap();
+    let at = |y, m, d| Value::Number(gridz_core::date::serial_from_ymd(DateSystem::D1900, y, m, d).unwrap() + 10.5 / 24.0);
+    assert_eq!(v(&wb, 1, 0), at(2026, 5, 31));
+    assert_eq!(v(&wb, 2, 0), at(2026, 4, 3));
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+#[test]
+fn iso_dates_are_not_reordered_by_their_column() {
+    let wb = read_csv(b"When\n31/05/2026\n2026-03-04\n", &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 1, 0), date(2026, 5, 31));
+    assert_eq!(v(&wb, 2, 0), date(2026, 3, 4));
 }
 
 #[test]
@@ -69,6 +149,74 @@ fn encodings() {
 }
 
 #[test]
+fn arabic_csv_in_windows_1256_reads_as_arabic() {
+    let bytes = [
+        0xC7, 0xE1, 0xC7, 0xD3, 0xE3, b',', 0xC7, 0xE1, 0xDE, 0xED, 0xE3, 0xC9, b'\n', 0xE3, 0xD1, 0xCD, 0xC8, 0xC7, b' ', b'1', b'2', b'3', 0xA1,
+        b' ', b'4', b'2', 0xBF, b',', 0xC8, 0xED, 0xC7, 0xE4, 0xC7, 0xCA, b' ', b'7', b'\n',
+    ];
+    let wb = read_csv(&bytes, &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 0, 0), Value::text("الاسم"));
+    assert_eq!(v(&wb, 0, 1), Value::text("القيمة"));
+    assert_eq!(v(&wb, 1, 0), Value::text("مرحبا 123، 42؟"));
+    assert_eq!(v(&wb, 1, 1), Value::text("بيانات 7"));
+}
+
+fn reads_as_arabic(bytes: &[u8]) -> bool {
+    decode_text(bytes).chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c))
+}
+
+#[test]
+fn western_1252_text_stays_latin() {
+    let french = [
+        b'C', b'r', 0xE8, b'm', b'e', b' ', b'b', b'r', 0xFB, b'l', 0xE9, b'e', b',', b' ', 0xE0, b' ', b'c', 0xF4, b't', 0xE9, b',', b' ', 0xE9,
+        b't', 0xE9,
+    ];
+    let german = [
+        b'G', b'r', 0xF6, 0xDF, b'e', b',', b' ', 0xDC, b'b', b'e', b'r', b'm', b'a', 0xDF, b',', b' ', b'F', b'u', 0xDF, b'g', 0xE4, b'n', b'g',
+        b'e', b'r',
+    ];
+    assert_eq!(decode_text(&french), "Crème brûlée, à côté, été");
+    assert_eq!(decode_text(&german), "Größe, Übermaß, Fußgänger");
+    let portuguese = [
+        b'A', 0xC7, 0xC3, b'O', b',', b' ', b'i', b'n', b'f', b'o', b'r', b'm', b'a', 0xE7, 0xE3, b'o', b',', b' ', b's', b'i', b't', b'u', b'a',
+        0xE7, 0xE3, b'o', b',', b' ', b'P', 0xE3, b'o',
+    ];
+    assert_eq!(decode_text(&portuguese), "AÇÃO, informação, situação, Pão");
+    let nordic = [
+        0xC6, b'r', 0xF8, b',', 0xD8, b's', b't', b',', 0xC5, b's', b'e', b',', 0xDE, 0xF3, b'r', 0xF0, b'u', b'r', b',', b'G', b'u', 0xF0, b'r',
+        0xFA, b'n', b',', 0xC4, 0xD6, 0xDC,
+    ];
+    assert_eq!(decode_text(&nordic), "Ærø,Øst,Åse,Þórður,Guðrún,ÄÖÜ");
+    let ordinals = [b'1', 0xBA, b',', b'2', 0xBA, b',', b'3', 0xBA, b'\n', b'1', 0xAA, b',', b'2', 0xAA];
+    assert_eq!(decode_text(&ordinals), "1º,2º,3º\n1ª,2ª");
+    let inside_words = [b'K', 0xE4, b's', b'e', b',', b'B', 0xE4, b'c', b'k', b'e', b'r'];
+    assert_eq!(decode_text(&inside_words), "Käse,Bäcker");
+}
+
+#[test]
+fn short_arabic_words_read_as_arabic() {
+    assert_eq!(decode_text(&[0xDD, 0xED, b',', 0xE3, 0xE4, b',', 0xDA, 0xE4, b'\n']), "في,من,عن\n");
+    assert_eq!(decode_text(&[0xE4, 0xDA, 0xE3, b',', 0xE1, 0xC7, b'\n', 0xE1, 0xC7, b',', 0xE4, 0xDA, 0xE3, b'\n']), "نعم,لا\nلا,نعم\n");
+    assert_eq!(decode_text(&[0x98, 0xCA, 0xC7, 0xC8, b' ', 0x81, 0xC7, 0xD1, 0xD3, 0xED]), "کتاب پارسي");
+    let with_marks = [
+        0xDF, 0xCA, 0xC7, 0xC8, 0x9D, 0xE5, 0xC7, b',', 0xCE, 0xC7, 0xE4, 0xE5, 0x9D, 0xE5, 0xC7, b',', 0xE3, 0xCD, 0xE3, 0xCF, 0xFE, b',', 0xDA,
+        0xE1, 0xED, 0xFE,
+    ];
+    assert_eq!(decode_text(&with_marks), "كتاب\u{200C}ها,خانه\u{200C}ها,محمد\u{200F},علي\u{200F}");
+}
+
+#[test]
+fn hebrew_1255_bytes_are_not_read_as_arabic() {
+    let plain = [0xF9, 0xEC, 0xE5, 0xED, b',', 0xF2, 0xE5, 0xEC, 0xED];
+    let pointed = [0xF9, 0xC8, 0xD1, 0xEC, 0xE5, 0xC9, 0xED, b' ', 0xF2, 0xE5, 0xC9, 0xEC, 0xC8, 0xED];
+    let maqaf = [0xFA, 0xEC, 0xCE, 0xE0, 0xE1, 0xE9, 0xE1, b',', 0xE1, 0xEF, 0xCE, 0xE2, 0xE5, 0xF8, 0xE9, 0xE5, 0xEF];
+    let gershayim = [0xF6, 0xE4, 0xD8, 0xEC, b',', 0xE3, 0xD8, 0xF8];
+    for bytes in [&plain[..], &pointed, &maqaf, &gershayim] {
+        assert!(!reads_as_arabic(bytes), "{:?}", decode_text(bytes));
+    }
+}
+
+#[test]
 fn delimiter_sniffing() {
     assert_eq!(sniff_delimiter("a;b;c\n1;2;3\n", '"'), b';');
     assert_eq!(sniff_delimiter("a\tb\n1\t2\n", '"'), b'\t');
@@ -110,14 +258,15 @@ fn writing() {
         Value::Array(_) => String::new(),
     };
     let out = String::from_utf8(write_csv(sh, b',', raw).unwrap()).unwrap();
-    assert_eq!(out, "\"a,b\",\"q\"\"t\",\r\n0.1,FALSE,\r\n#DIV/0!,,\"x\ny\"\r\n");
+    // The first cell is B2: the file starts at A1, so the leading empty row and column stay.
+    assert_eq!(out, ",,,\r\n,\"a,b\",\"q\"\"t\",\r\n,0.1,FALSE,\r\n,#DIV/0!,,\"x\ny\"\r\n");
     let semi = String::from_utf8(write_csv(sh, b';', raw).unwrap()).unwrap();
-    assert!(semi.starts_with("a,b;"));
+    assert!(semi.starts_with(";;;\r\n;a,b;"));
     assert!(write_csv(&Sheet::new("E"), b',', raw).unwrap().is_empty());
     // Round trip.
     let back = read_csv(out.as_bytes(), &CsvOptions::default()).unwrap();
-    assert_eq!(v(&back, 0, 0), Value::text("a,b"));
-    assert_eq!(v(&back, 2, 2), Value::text("x\ny"));
+    assert_eq!(v(&back, 1, 1), Value::text("a,b"));
+    assert_eq!(v(&back, 3, 3), Value::text("x\ny"));
 }
 
 #[test]
@@ -126,8 +275,9 @@ fn sniffing_formats() {
     assert_eq!(sniff(b"a,b\n1,2"), Format::Csv);
     // An Excel password-protected file is a CFB/OLE2 compound file with an EncryptedPackage
     // stream; any other compound file is a legacy binary (.xls), not an encrypted workbook.
-    assert_eq!(sniff(&crate::cfb::tests::build(&["EncryptionInfo", "EncryptedPackage"])), Format::Encrypted);
-    assert_eq!(sniff(&crate::cfb::tests::build(&["Workbook"])), Format::LegacyBinary);
+    let compound = crate::testing::compound_file;
+    assert_eq!(sniff(&compound(&[("EncryptionInfo", b"x"), ("EncryptedPackage", b"x")])), Format::Encrypted);
+    assert_eq!(sniff(&compound(&[("WordDocument", b"x")])), Format::LegacyBinary);
     assert_eq!(sniff(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0]), Format::LegacyBinary);
     assert_eq!(sniff(&[0xD0, 0xCF, 0x11, 0xE0, 0, 0, 1, 2]), Format::Unknown);
     assert_eq!(sniff(b""), Format::Unknown);
@@ -186,7 +336,232 @@ fn the_cap_counts_the_bytes_the_cells_hold_and_accepted_exports_keep_every_posit
     let err = write_csv_limited(&long, b',', 1000, text_of(&long)).unwrap_err();
     assert!(err.to_string().contains("stopped at row"), "{err}");
     assert!(write_csv_limited(&long, b',', 50 * 102, text_of(&long)).is_ok());
+    // Within one row the cap is checked before each field is written: a wide row of long and
+    // quote-heavy fields is refused at the field that crosses it, without asking for the rest.
+    let mut wide = Sheet::new("W");
+    for c in 0..10u32 {
+        wide.set_value(CellRef::new(0, c), Value::text("\"".repeat(100)));
+    }
+    let mut asked = 0;
+    let err = write_csv_limited(&wide, b',', 500, |c| {
+        asked += 1;
+        text_of(&wide)(c)
+    })
+    .unwrap_err();
+    assert!(err.to_string().contains("stopped at row 1"), "{err}");
+    assert_eq!(asked, 3, "each field is 202 bytes; the third passes 500");
+    // Exact boundary: a quoted field of 202 bytes plus CRLF fits in 204 and not in 203.
+    let mut one = Sheet::new("O");
+    one.set_value(CellRef::new(0, 0), Value::text("\"".repeat(100)));
+    assert_eq!(write_csv_limited(&one, b',', 204, text_of(&one)).unwrap().len(), 204);
+    assert!(write_csv_limited(&one, b',', 203, text_of(&one)).is_err());
     // A tab is one byte, like a comma.
     let tabs = write_csv_limited(&s, b'\t', 14, text_of(&s)).unwrap();
     assert_eq!(tabs.len(), 14);
+}
+
+/// #2159: a record keeps at most one field per sheet column while it is read, not after; the rest
+/// of the line is still read through, so the next line starts the next record.
+#[test]
+fn fields_past_the_last_column_are_not_collected() {
+    let src = format!("{}last\nnext,row\n", "x,".repeat(100_000));
+    let mut records = vec![];
+    parse_records(&src, ',', '"', MAX_COLS as usize, |rec| {
+        records.push(rec);
+        true
+    });
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].len(), 16_384);
+    assert_eq!(records[1], vec!["next".to_string(), "row".to_string()]);
+    // The same through the reader, and a quoted delimiter past the cap doesn't split the line.
+    let src = format!("{}\"a,\nb\",z\nnext\n", "x,".repeat(20_000));
+    let wb = read_csv(src.as_bytes(), &CsvOptions { delimiter: b',', ..CsvOptions::default() }).unwrap();
+    assert_eq!(v(&wb, 0, 16_383), Value::text("x"));
+    assert_eq!(v(&wb, 1, 0), Value::text("next"));
+    assert_eq!(wb.sheet(0).unwrap().cells.len(), 16_385);
+}
+
+/// #2159: a long field past the last column is skipped character by character, not collected
+/// and then thrown away; a quote inside it is a plain character, as in a kept field.
+#[test]
+fn a_long_field_past_the_last_column_is_not_stored() {
+    let src = format!("{}{}a\"b,{}\nnext,row\n", "x,".repeat(16_384), "y".repeat(1_000_000), "z".repeat(1_000));
+    let mut records = vec![];
+    parse_records(&src, ',', '"', MAX_COLS as usize, |rec| {
+        records.push(rec);
+        true
+    });
+    assert_eq!(records.len(), 2, "the quote didn't open a quoted field across the line end");
+    assert_eq!(records[0].len(), 16_384);
+    assert!(records[0].iter().all(|f| f == "x"));
+    assert_eq!(records[1], vec!["next".to_string(), "row".to_string()]);
+}
+
+#[test]
+fn parser_stops_collecting_fields_at_max_cols() {
+    let extra = 50;
+    // MAX_COLS + extra fields on the first row (the last one filled), then a short second row.
+    let mut text = ",".repeat((MAX_COLS + extra) as usize - 1);
+    text.push_str("end\nx,y\n");
+    let mut lens = vec![];
+    parse_records(&text, ',', '"', MAX_COLS as usize, |rec| {
+        lens.push(rec.len());
+        true
+    });
+    assert_eq!(lens, vec![MAX_COLS as usize, 2]);
+    // An unterminated last row is capped the same way.
+    let mut lens = vec![];
+    parse_records(&",".repeat(MAX_COLS as usize + extra as usize), ',', '"', MAX_COLS as usize, |rec| {
+        lens.push(rec.len());
+        true
+    });
+    assert_eq!(lens, vec![MAX_COLS as usize]);
+}
+
+/// #1446: a first line `sep=` plus one character names the delimiter and isn't data, as Excel 16.0
+/// reads it when it opens a CSV file. Each case: file → first two rows.
+#[test]
+fn sep_line_names_the_delimiter() {
+    let read = |src: &str| -> Vec<String> {
+        let wb = read_csv(src.as_bytes(), &CsvOptions { delimiter: 0, parse_values: false, ..Default::default() }).unwrap();
+        let sh = wb.sheet(0).unwrap();
+        let cell = |r, c| sh.value(CellRef::new(r, c)).as_text().map(|t| t.to_string()).unwrap_or_default();
+        (0..2).map(|r| (0..3).map(|c| cell(r, c)).collect::<Vec<_>>().join("|").trim_end_matches('|').to_string()).collect()
+    };
+    // Named delimiters, whatever the text would suggest.
+    assert_eq!(read("sep=|\r\nA|B\r\n1|2\r\n"), ["A|B", "1|2"]);
+    assert_eq!(read("sep=;\nA;B,C\n"), ["A|B,C", ""]);
+    assert_eq!(read("sep=,\r\n1,5;2\r\n"), ["1|5;2", ""]);
+    assert_eq!(read("sep=\t\r\nA\tB\r\n"), ["A|B", ""]);
+    assert_eq!(read("sep=x\r\nAxB\r\n"), ["A|B", ""]);
+    // Spaces anywhere, upper case, the line quoted as a field, a BOM before it.
+    for src in ["sep= |\r\nA|B", "sep =|\r\nA|B", " sep=|  \r\nA|B", "SEP=|\r\nA|B", "\"sep=|\"\r\nA|B", "\u{feff}sep=|\r\nA|B"] {
+        assert_eq!(read(src), ["A|B", ""], "{src:?}");
+    }
+    // `sep=` naming nothing (or a space) is dropped and splits nothing.
+    assert_eq!(read("sep=\r\nA;B\tC,D\r\n"), ["A;B\tC,D", ""]);
+    assert_eq!(read("sep= \r\nA,B\r\n"), ["A,B", ""]);
+    assert_eq!(read("sep=|"), ["", ""], "only the line: an empty sheet");
+    // `sep="`: split at the quotes.
+    assert_eq!(read("sep=\"\r\nA\"B\r\n"), ["A|B", ""]);
+    // Data: two characters after `=` (a tab counts), the line anywhere but first, an unclosed quote.
+    assert_eq!(read("sep=ab\r\nAaB\r\n"), ["sep=ab", "AaB"]);
+    assert_eq!(read("sep=|\t\r\nA|B\r\n"), ["sep=|\t", "A|B"]);
+    assert!(read("sep=;,\r\nA;B,C\r\n")[0].starts_with("sep=;"), "data, split as the text suggests");
+    assert_eq!(read("A,B\r\nsep=,\r\n"), ["A|B", "sep="], "a data row, split at its comma");
+    // A delimiter that was given wins, and the line stays data.
+    let wb = read_csv(b"sep=|\r\nA|B\r\n", &CsvOptions { delimiter: b',', ..Default::default() }).unwrap();
+    assert_eq!(wb.sheet(0).unwrap().value(CellRef::new(0, 0)), Value::text("sep=|"));
+    // Saved again with the named delimiter only when it would be detected without the line.
+    let delim = |src: &str| read_csv(src.as_bytes(), &CsvOptions { delimiter: 0, ..Default::default() }).unwrap().csv_delimiter;
+    assert_eq!(delim("sep=;\r\nA;B"), Some(b';'));
+    assert_eq!(delim("sep=\t\r\nA\tB"), Some(b'\t'));
+    assert_eq!(delim("sep=|\r\nA|B"), None, "| isn't detected: saved with commas so it reopens in columns");
+}
+
+/// Review of #2270: the delimiter a `sep=` line names is kept for saving only if the text would be
+/// read with it again.
+#[test]
+fn a_named_delimiter_is_kept_only_if_it_would_be_detected_again() {
+    let opts = CsvOptions { delimiter: 0, parse_values: false, ..Default::default() };
+    let texts = |wb: &Workbook| -> Vec<String> {
+        let sh = wb.sheet(0).unwrap();
+        (0..2).flat_map(|r| (0..2).map(move |c| CellRef::new(r, c))).map(|c| sh.value(c).as_text().unwrap_or("").to_string()).collect()
+    };
+    let save = |wb: &Workbook| {
+        let sh = wb.sheet(0).unwrap();
+        write_csv(sh, wb.csv_delimiter.unwrap_or(b','), |c| sh.value(c).as_text().unwrap_or("").to_string()).unwrap()
+    };
+    // `;` named, but `a;b,c` would be detected as commas: saved with commas, it reopens the same.
+    let wb = read_csv(b"sep=;\na;b,c\n1;2,3\n", &opts).unwrap();
+    assert_eq!(texts(&wb), ["a", "b,c", "1", "2,3"]);
+    assert_eq!(wb.csv_delimiter, None);
+    let saved = save(&wb);
+    assert_eq!(saved, b"a,\"b,c\"\r\n1,\"2,3\"\r\n");
+    assert_eq!(texts(&read_csv(&saved, &opts).unwrap()), ["a", "b,c", "1", "2,3"]);
+    // `;` named and detected again: kept.
+    assert_eq!(read_csv(b"sep=;\na;b\n1;2\n", &opts).unwrap().csv_delimiter, Some(b';'));
+}
+
+#[test]
+fn sep_line_counts_against_the_output_limit() {
+    let mut sheet = Sheet::new("Sheet1");
+    sheet.set_value(CellRef::new(0, 0), Value::text("sep=;"));
+    let text = |c: CellRef| sheet.value(c).as_text().unwrap_or("").to_string();
+    // The row is 7 bytes and fits; with the `sep=,` line it needs 14.
+    assert!(matches!(write_csv_limited(&sheet, b',', 7, text), Err(IoError::TooLarge(_))));
+    assert_eq!(write_csv_limited(&sheet, b',', 14, text).unwrap(), b"sep=,\r\nsep=;\r\n");
+}
+
+/// Review of #2270: a first row that looks like a `sep=` line (a lone `sep=;` in A1) is data. Saved
+/// behind a `sep=,` line it opens as it was; Excel writes it bare and reads it back garbled.
+#[test]
+fn a_first_row_like_a_sep_line_survives_a_save() {
+    let opts = CsvOptions { delimiter: 0, parse_values: false, ..Default::default() };
+    let texts = |wb: &Workbook| -> Vec<String> {
+        let sh = wb.sheet(0).unwrap();
+        (0..2).flat_map(|r| (0..2).map(move |c| CellRef::new(r, c))).map(|c| sh.value(c).as_text().unwrap_or("").to_string()).collect()
+    };
+    let mut sheet = Sheet::new("Sheet1");
+    sheet.set_value(CellRef::new(0, 0), Value::text("sep=;"));
+    sheet.set_value(CellRef::new(1, 0), Value::text("value"));
+    let saved = write_csv(&sheet, b',', |c| sheet.value(c).as_text().unwrap_or("").to_string()).unwrap();
+    assert_eq!(saved, b"sep=,\r\nsep=;\r\nvalue\r\n");
+    assert_eq!(texts(&read_csv(&saved, &opts).unwrap()), ["sep=;", "", "value", ""]);
+    // Other first rows are written as before.
+    let mut plain = Sheet::new("Sheet1");
+    plain.set_value(CellRef::new(0, 0), Value::text("separator"));
+    assert_eq!(write_csv(&plain, b',', |c| plain.value(c).as_text().unwrap_or("").to_string()).unwrap(), b"separator\r\n");
+}
+
+#[test]
+fn a_field_over_32767_characters_is_cut() {
+    let src = format!("{},{},'{}", "x".repeat(40_000), "y".repeat(32_768), "z".repeat(40_000));
+    for parse_values in [true, false] {
+        let wb = read_csv(src.as_bytes(), &CsvOptions { parse_values, ..Default::default() }).unwrap();
+        assert_eq!(v(&wb, 0, 0), Value::text("x".repeat(32_767)));
+        assert_eq!(v(&wb, 0, 1), Value::text("y".repeat(32_767)));
+    }
+    // The apostrophe is dropped before the cut when values are parsed.
+    let wb = read_csv(src.as_bytes(), &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 0, 2), Value::text("z".repeat(32_767)));
+}
+
+#[test]
+fn csv_used_range_limit_is_enforced_while_reading() {
+    let opts = |max| CsvOptions { max_used_cells: Some(max), ..Default::default() };
+    // 3 rows x 3 columns: exactly at the limit reads, one cell over is refused.
+    let dense = b"1,2,3\n4,5,6\n7,8,9\n";
+    assert!(read_csv(dense, &opts(9)).is_ok());
+    assert!(matches!(read_csv(dense, &opts(8)), Err(IoError::TooLarge(_))));
+    // The limit is on the used range: empty leading rows, columns and trailing lines are free.
+    assert!(read_csv(b"\n\n,,x,y\n,,z,w\n\n\n", &opts(4)).is_ok());
+    // A wide sparse row against a tall one: refused once the box passes the limit.
+    assert!(matches!(read_csv(b"a\nb\nc\n,,,,d\n", &opts(10)), Err(IoError::TooLarge(_))));
+    // No limit by default.
+    assert!(read_csv(dense, &CsvOptions::default()).is_ok());
+}
+
+/// `sep=` naming nothing reads through craft-csv with a stand-in delimiter the text doesn't hold
+/// (`sep_line_names_the_delimiter` has the usual cases). A text holding every noncharacter still
+/// opens whole: another character stands in. Review of #2270: it was split at U+FDD0.
+#[test]
+fn sep_line_stand_in_survives_a_text_holding_every_stand_in() {
+    let all: String = (0xFDD0..=0xFDEF).filter_map(char::from_u32).collect();
+    let text = format!("sep=\r\nx{all}y\r\n\0z\r\n");
+    let wb = read_csv(text.as_bytes(), &CsvOptions { delimiter: 0, parse_values: false, ..Default::default() }).unwrap();
+    let sh = wb.sheet(0).unwrap();
+    assert_eq!(sh.value(CellRef::new(0, 0)), Value::text(format!("x{all}y")), "the whole line is one field");
+    assert_eq!(sh.value(CellRef::new(0, 1)), Value::Empty);
+    assert_eq!(sh.value(CellRef::new(1, 0)), Value::text("\0z"));
+}
+
+/// A text that holds every character leaves nothing to stand in for the missing delimiter: it's
+/// refused, not split at one of its own characters.
+#[test]
+fn sep_line_without_a_free_stand_in_is_refused() {
+    let all: String = (0..=0x10_FFFF).filter_map(char::from_u32).filter(|c| !matches!(c, '\r' | '\n')).collect();
+    let text = format!("sep=\r\n{all}\r\n");
+    let opts = CsvOptions { delimiter: 0, parse_values: false, ..Default::default() };
+    assert!(matches!(read_csv(text.as_bytes(), &opts), Err(IoError::Format(_))));
 }

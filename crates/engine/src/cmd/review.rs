@@ -5,7 +5,7 @@ use gridz_core::CellRef;
 use gridz_model::{EditRange, PasswordHash, SheetProtection, Visibility, password_hash};
 use serde_json::{Value as Json, json};
 
-use super::*;
+use super::{CommandSpec, DocState, EngineError, Result, Session, bad, bool_param, cmd, edit, has_doc, str_param, target_ranges, target_sheet};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -35,6 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Allow Edit Ranges…",
             menu: &["Review", "Protect"],
             shortcut: None,
+            shortcut_mac: None,
             params: "{action?: list (default) | add | modify | delete | unlock, title?, range?, password?, newTitle?, sheet?} → ranges",
             enabled: has_doc,
             run: allow_edit_ranges,
@@ -90,7 +91,7 @@ fn has_comments(s: &Session) -> std::result::Result<(), String> {
 fn step_comment(s: &mut Session, forward: bool) -> Result<Json> {
     let list = comment_cells(s);
     let d = s.doc()?;
-    let here = (d.wb.active_sheet, d.selection.active);
+    let here = (d.wb.active_sheet(), d.selection.active);
     let target = if forward {
         list.iter().find(|c| **c > here).or_else(|| list.first())
     } else {
@@ -139,11 +140,15 @@ fn protect_sheet(s: &mut Session, p: &Json) -> Result<Json> {
         return Err(EngineError::Other("The sheet is protected with a password. Unprotect it first (Review › Unprotect Sheet).".into()));
     }
     let b = |k: &str| bool_param(p, k).unwrap_or(false);
+    // Selection rights default to what the sheet has now (a file may forbid selecting locked cells).
+    let current = s.doc()?.wb.sheet(sheet).and_then(|sh| sh.protection.clone());
+    let select_locked = bool_param(p, "selectLockedCells").unwrap_or_else(|| current.as_ref().is_none_or(|c| c.select_locked));
+    let select_unlocked = bool_param(p, "selectUnlockedCells").unwrap_or_else(|| current.as_ref().is_none_or(|c| c.select_unlocked));
     let prot = SheetProtection {
         password: None,
         legacy_password_hash: None,
-        select_locked: true,
-        select_unlocked: true,
+        select_locked,
+        select_unlocked,
         format_cells: b("formatCells"),
         format_columns: b("formatColumns"),
         format_rows: b("formatRows"),
@@ -156,8 +161,10 @@ fn protect_sheet(s: &mut Session, p: &Json) -> Result<Json> {
     };
     let d = s.doc()?;
     let what = d.wb.sheet(sheet).map(|sh| sh.name.clone()).unwrap_or_default();
-    let prot = SheetProtection { password: str_param(p, "password").filter(|x| !x.is_empty()).map(|pw| new_password_hash(d, &what, pw)), ..prot };
+    let prot = SheetProtection { password: str_param(p, "password").filter(|x| !x.is_empty()).map(|pw| new_protection_hash(d, &what, pw)), ..prot };
     edit(s, |cx| {
+        // FORMULATEXT reads a sheet's protection: its results are recalculated.
+        cx.recalc_all = true;
         cx.sheet_mut(sheet)?.protection = Some(prot.clone());
         Ok(Json::Null)
     })
@@ -177,18 +184,33 @@ fn unprotect_sheet(s: &mut Session, p: &Json) -> Result<Json> {
         }
     }
     edit(s, |cx| {
-        cx.sheet_mut(sheet)?.protection = None;
+        // Only removing protection changes what FORMULATEXT reads; a no-op unprotect skips the full recalculation.
+        if cx.sheet_mut(sheet)?.protection.take().is_some() {
+            cx.recalc_all = true;
+        }
         Ok(Json::Null)
     })
 }
 
-/// A new Excel-compatible (SHA-512, salted) hash of `pw`. The salt mixes `what` is protected
-/// with the document, a counter and the clock, so equal passwords get different hashes.
+/// A new hash of a sheet's or the workbook's protection password, in every form a file keeps
+/// (Excel's salted SHA-512 and OpenDocument's SHA-256 digest), so it survives saving in either
+/// format.
+fn new_protection_hash(d: &DocState, what: &str, pw: &str) -> PasswordHash {
+    PasswordHash::new_for_files(pw, &new_salt(d, what))
+}
+
+/// A new Excel-compatible (SHA-512, salted) hash of `pw`: edit ranges only have this form.
 fn new_password_hash(d: &DocState, what: &str, pw: &str) -> PasswordHash {
+    PasswordHash::new_sha512(pw, &new_salt(d, what))
+}
+
+/// A salt mixing `what` is protected with the document, a counter and the clock, so equal
+/// passwords get different hashes.
+fn new_salt(d: &DocState, what: &str) -> [u8; 16] {
     static SALT_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = SALT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let seed = format!("{what}\u{0}{n}\u{0}{}\u{0}{}", d.uid, gridz_calc::now_serial().to_bits());
-    PasswordHash::new_sha512(pw, &gridz_model::password::salt_from(seed.as_bytes()))
+    gridz_model::password::salt_from(seed.as_bytes())
 }
 
 fn range_text(r: &EditRange) -> String {
@@ -307,7 +329,7 @@ fn protect_workbook(s: &mut Session, p: &Json) -> Result<Json> {
         return Ok(json!({"on": on}));
     }
     let password = if on {
-        str_param(p, "password").filter(|pw| !pw.is_empty()).map(|pw| new_password_hash(d, "workbook", pw))
+        str_param(p, "password").filter(|pw| !pw.is_empty()).map(|pw| new_protection_hash(d, "workbook", pw))
     } else {
         if let Some(h) = &d.wb.structure_password
             && !h.verify(str_param(p, "password").unwrap_or("")).map_err(EngineError::Other)?
@@ -370,7 +392,7 @@ mod tests {
 
     fn at(s: &Session) -> (usize, String) {
         let d = s.doc().unwrap();
-        (d.wb.active_sheet, d.selection.active.a1())
+        (d.wb.active_sheet(), d.selection.active.a1())
     }
 
     #[test]
@@ -400,11 +422,49 @@ mod tests {
     }
 
     #[test]
+    fn protecting_and_unprotecting_leave_table_headers_alone() {
+        let mut s = Session::new();
+        s.new_workbook();
+        s.execute("range.setValues", json!({"range": "A1", "values": [["a", "b"], [1, 2]]})).unwrap();
+        s.execute("insert.table", json!({"range": "A1:B2", "header": true})).unwrap();
+        // An imported header can hold a number: only a structural edit would turn it back into text.
+        let d = s.doc_mut().unwrap();
+        std::sync::Arc::make_mut(&mut d.wb).sheet_mut(0).unwrap().set_value(gridz_core::CellRef::new(0, 0), gridz_core::Value::Number(7.0));
+        s.execute("review.protectSheet", json!({})).unwrap();
+        s.execute("review.unprotectSheet", json!({})).unwrap();
+        let v = s.doc().unwrap().wb.sheet(0).unwrap().value(gridz_core::CellRef::new(0, 0));
+        assert_eq!(v, gridz_core::Value::Number(7.0));
+    }
+
+    #[test]
+    fn protection_that_forbids_selecting_locked_cells_is_enforced_and_kept() {
+        let mut s = book();
+        s.execute("home.lockCell", json!({"range": "B2", "on": false})).unwrap();
+        s.execute("review.protectSheet", json!({"selectLockedCells": false})).unwrap();
+        // Locked cells can't be selected; unlocked ones can.
+        assert!(s.execute("selection.set", json!({"cell": "A1"})).is_err());
+        s.execute("selection.set", json!({"cell": "B2"})).unwrap();
+        // Arrow keys skip locked cells, and stay put when nothing selectable is left.
+        s.execute("selection.move", json!({"dr": 0, "dc": 1})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.active.a1(), "B2");
+        // Re-protecting without the flag keeps the sheet's selection rights.
+        s.execute("review.unprotectSheet", json!({})).unwrap();
+        s.execute("review.protectSheet", json!({"selectLockedCells": false})).unwrap();
+        s.execute("review.protectSheet", json!({"sort": true})).unwrap();
+        assert!(!s.doc().unwrap().wb.active().unwrap().protection.clone().unwrap().select_locked);
+        s.execute("review.unprotectSheet", json!({})).unwrap();
+        s.execute("selection.set", json!({"cell": "A1"})).unwrap();
+    }
+
+    #[test]
     fn sheet_passwords_use_excel_hashes_and_old_json_hashes_still_verify() {
         let mut s = book();
         s.execute("review.protectSheet", json!({"password": "pa55"})).unwrap();
         let prot = s.doc().unwrap().wb.active().unwrap().protection.clone().unwrap();
-        assert!(matches!(&prot.password, Some(PasswordHash::Iterated { algorithm, .. }) if algorithm == "SHA-512"));
+        // Kept in both forms: Excel's salted SHA-512 and OpenDocument's SHA-256 digest.
+        let password = prot.password.as_ref().unwrap();
+        assert!(matches!(password.excel(), Some(PasswordHash::Iterated { algorithm, .. }) if algorithm == "SHA-512"));
+        assert_eq!(password.odf_key(), PasswordHash::new_sha256_digest("pa55").odf_key());
         assert!(s.execute("review.unprotectSheet", json!({})).is_err());
         assert!(s.execute("review.unprotectSheet", json!({"password": "pass"})).is_err());
         // Protecting again can't swap the password out from under it.
@@ -419,11 +479,37 @@ mod tests {
         );
         let prot: SheetProtection = serde_json::from_str(&old).unwrap();
         assert_eq!((prot.legacy_password_hash, prot.password.is_none()), (Some(password_hash("old")), true));
-        let i = s.doc().unwrap().wb.active_sheet;
+        let i = s.doc().unwrap().wb.active_sheet();
         let wb = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().wb);
         std::sync::Arc::make_mut(&mut wb.sheets[i]).protection = Some(prot);
         assert!(s.execute("review.unprotectSheet", json!({"password": "new"})).is_err());
         s.execute("review.unprotectSheet", json!({"password": "old"})).unwrap();
+    }
+
+    #[test]
+    fn protected_structure_blocks_rename_move_copy_hide_and_unhide_sheet() {
+        let mut s = book();
+        let names = |s: &Session| s.doc().unwrap().wb.sheets.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+        let before = names(&s);
+        s.execute("review.protectWorkbook", json!({})).unwrap();
+        assert!(s.execute("sheet.rename", json!({"sheet": 0, "name": "Renamed"})).is_err());
+        assert!(s.execute("sheet.move", json!({"sheet": 0, "to": 1})).is_err());
+        assert!(s.execute("sheet.move", json!({"sheet": 0, "to": 1, "copy": true})).is_err());
+        assert!(s.execute("sheet.hide", json!({"sheet": 1})).is_err());
+        assert_eq!(names(&s), before);
+        assert!(s.doc().unwrap().wb.sheets.iter().all(|x| x.visibility == Visibility::Visible));
+        s.execute("review.protectWorkbook", json!({})).unwrap();
+        s.execute("sheet.rename", json!({"sheet": 0, "name": "Renamed"})).unwrap();
+        s.execute("sheet.move", json!({"sheet": 0, "to": 1})).unwrap();
+        s.execute("sheet.move", json!({"sheet": 0, "to": 1, "copy": true})).unwrap();
+        assert_eq!(s.doc().unwrap().wb.sheets.len(), 3);
+        s.execute("sheet.hide", json!({"sheet": 1})).unwrap();
+        s.execute("review.protectWorkbook", json!({})).unwrap();
+        assert!(s.execute("sheet.unhide", json!({"sheet": 1})).is_err());
+        assert!(s.execute("sheet.unhide", json!({})).is_err());
+        assert_eq!(s.doc().unwrap().wb.sheets[1].visibility, Visibility::Hidden);
+        s.execute("review.protectWorkbook", json!({})).unwrap();
+        s.execute("sheet.unhide", json!({"sheet": 1})).unwrap();
     }
 
     #[test]

@@ -8,12 +8,17 @@ description = "GridZ document model: workbooks, sheets, cells, styles, tables, c
 [lints]
 workspace = true
 
+[features]
+# Counts work for other crates' growth tests (a dev-dependency feature; never enabled in a
+# shipped build).
+test-support = []
+
 [dependencies]
 gridz-core = { workspace = true }
+sha1 = { workspace = true }
 sha2 = { workspace = true }
 gridz-formula = { workspace = true }
+gridz-math = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+thiserror = { workspace = true }

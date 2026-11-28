@@ -46,26 +46,20 @@ pub fn builtin_format(id: u32) -> Option<&'static str> {
     BUILTIN_FORMATS.iter().find(|(i, _)| *i == id).map(|(_, c)| *c)
 }
 
-/// Id to write for a format code when it is a locale-independent built-in (currency formats 5–8
-/// are written as custom formats because their meaning depends on the reader's locale).
+/// Id to write for a format code when it is a locale-independent built-in. The currency formats
+/// 5–8 and the accounting formats with a currency, 42 and 44, are written as custom formats because
+/// their meaning depends on the reader's locale.
 pub fn builtin_id(code: &str) -> Option<u32> {
-    BUILTIN_FORMATS.iter().find(|(i, c)| *c == code && !(5..=8).contains(i)).map(|(i, _)| *i)
+    BUILTIN_FORMATS.iter().find(|(i, c)| *c == code && !matches!(i, 5..=8 | 42 | 44)).map(|(i, _)| *i)
 }
 
-/// The 64-entry legacy palette (`indexed` colours), RRGGBB.
-pub const INDEXED: [u32; 64] = [
-    0x000000, 0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF, // 0-7
-    0x000000, 0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF, // 8-15
-    0x800000, 0x008000, 0x000080, 0x808000, 0x800080, 0x008080, 0xC0C0C0, 0x808080, // 16-23
-    0x9999FF, 0x993366, 0xFFFFCC, 0xCCFFFF, 0x660066, 0xFF8080, 0x0066CC, 0xCCCCFF, // 24-31
-    0x000080, 0xFF00FF, 0xFFFF00, 0x00FFFF, 0x800080, 0x800000, 0x008080, 0x0000FF, // 32-39
-    0x00CCFF, 0xCCFFFF, 0xCCFFCC, 0xFFFF99, 0x99CCFF, 0xFF99CC, 0xCC99FF, 0xFFCC99, // 40-47
-    0x3366FF, 0x33CCCC, 0x99CC00, 0xFFCC00, 0xFF9900, 0xFF6600, 0x666699, 0x969696, // 48-55
-    0x003366, 0x339966, 0x003300, 0x333300, 0x993300, 0x993366, 0x333399, 0x333333, // 56-63
-];
+pub use gridz_core::color::INDEXED;
 
-/// Paper sizes (`pageSetup paperSize`) we name.
-const PAPERS: [(u32, &str); 14] = [
+/// Paper sizes (`pageSetup paperSize`) we name. ID 12/13 are the JIS B4/B5 that
+/// `pageLayout.pageSetup` calls `B4`/`B5`; 42 is ISO B4, and 43–88 are the Japanese postcards,
+/// envelopes and B6. Their sizes are in `gridz_model::paper`, under the same names. 34 is
+/// ECMA-376's "B5 envelope (176 mm by 250 mm)": the ISO B5 size, so it reads as `B5 (ISO)`.
+const PAPERS: [(u32, &str); 23] = [
     (1, "Letter"),
     (3, "Tabloid"),
     (4, "Ledger"),
@@ -79,19 +73,31 @@ const PAPERS: [(u32, &str); 14] = [
     (13, "B5"),
     (20, "Envelope #10"),
     (27, "Envelope DL"),
-    (34, "Envelope B5"),
+    (34, "B5 (ISO)"),
+    (42, "B4 (ISO)"),
+    (43, "Japanese Postcard"),
+    (69, "Japanese Double Postcard"),
+    (70, "A6"),
+    (71, "Japanese Envelope Kaku #2"),
+    (72, "Japanese Envelope Kaku #3"),
+    (73, "Japanese Envelope #3"),
+    (74, "Japanese Envelope #4"),
+    (88, "B6"),
 ];
 
 pub fn paper_name(id: u32) -> Option<&'static str> {
     PAPERS.iter().find(|(i, _)| *i == id).map(|(_, n)| *n)
 }
 
+/// The file ID for a paper name, spelled any way [`gridz_model::paper::canonical`] takes.
 pub fn paper_id(name: &str) -> Option<u32> {
-    PAPERS.iter().find(|(_, n)| n.eq_ignore_ascii_case(name.trim())).map(|(i, _)| *i)
+    let name = gridz_model::paper::canonical(name)?;
+    PAPERS.iter().find(|(_, n)| *n == name).map(|(i, _)| *i)
 }
 
 /// Functions introduced after Excel 2007 that files store with the `_xlfn.` prefix. Entries with
 /// `_xlws.` get `_xlfn._xlws.`.
+/// NETWORKDAYS.INTL and WORKDAY.INTL are in the file format's own function list, so they're saved without `_xlfn.` (#3517).
 const FUTURE_FUNCTIONS: &[&str] = &[
     "ACOT",
     "ACOTH",
@@ -132,6 +138,7 @@ const FUTURE_FUNCTIONS: &[&str] = &[
     "CSCH",
     "DAYS",
     "DECIMAL",
+    "DETECTLANGUAGE",
     "DROP",
     "ENCODEURL",
     "ERF.PRECISE",
@@ -187,7 +194,6 @@ const FUTURE_FUNCTIONS: &[&str] = &[
     "MODE.SNGL",
     "MUNIT",
     "NEGBINOM.DIST",
-    "NETWORKDAYS.INTL",
     "NORM.DIST",
     "NORM.INV",
     "NORM.S.DIST",
@@ -224,6 +230,7 @@ const FUTURE_FUNCTIONS: &[&str] = &[
     "SORTBY",
     "STDEV.P",
     "STDEV.S",
+    "STOCKHISTORY",
     "SWITCH",
     "T.DIST",
     "T.DIST.2T",
@@ -238,6 +245,7 @@ const FUTURE_FUNCTIONS: &[&str] = &[
     "TEXTSPLIT",
     "TOCOL",
     "TOROW",
+    "TRANSLATE",
     "TRIMRANGE",
     "UNICHAR",
     "UNICODE",
@@ -248,7 +256,6 @@ const FUTURE_FUNCTIONS: &[&str] = &[
     "VSTACK",
     "WEBSERVICE",
     "WEIBULL.DIST",
-    "WORKDAY.INTL",
     "WRAPCOLS",
     "WRAPROWS",
     "XLOOKUP",
@@ -315,6 +322,20 @@ pub const EMU_PER_PX: f64 = 9525.0;
 mod tests {
     use super::*;
 
+    /// Every paper in the shared table saves with an XLSX id, so it reopens as itself. ECMA-376
+    /// has no upright ISO B6 id (35 is the B6 envelope stated wide), so `B6 (ISO)` alone has none.
+    #[test]
+    fn every_shared_paper_has_an_xlsx_id() {
+        for (name, _, _) in gridz_model::paper::PAPERS {
+            let id = paper_id(name);
+            if name == "B6 (ISO)" {
+                assert_eq!(id, None);
+            } else {
+                assert_eq!(id.and_then(paper_name), Some(name), "{name}");
+            }
+        }
+    }
+
     #[test]
     fn widths() {
         assert_eq!(col_width_to_px(9.140625), 64.0);
@@ -327,17 +348,68 @@ mod tests {
     }
 
     #[test]
+    fn builtin_format_ids() {
+        // The one table of built-in formats (gridz-numfmt has none: file formats do not depend on it).
+        assert_eq!((0..=60).filter(|&id| builtin_format(id).is_some()).count(), 36);
+        assert_eq!(builtin_format(0), Some("General"));
+        assert_eq!(builtin_format(22), Some("m/d/yyyy h:mm"));
+        assert_eq!(builtin_format(49), Some("@"));
+        // 23-36 are locale formats, above 49 is custom.
+        assert_eq!((23..=36).find_map(builtin_format), None);
+        assert_eq!(builtin_format(50), None);
+        // Writing: an exact (case-sensitive) code gives its id, except the locale-dependent currency and accounting formats 5-8, 42 and 44.
+        assert_eq!(builtin_id("General"), Some(0));
+        assert_eq!(builtin_id("GENERAL"), None);
+        assert_eq!(builtin_id("[H]:MM:SS"), None);
+        assert_eq!(builtin_id("[h]:mm:ss"), Some(46));
+        assert_eq!(builtin_id("#,##0.00_);(#,##0.00)"), None);
+        for id in 0..=60 {
+            let Some(code) = builtin_format(id) else { continue };
+            let expected = if matches!(id, 5..=8 | 42 | 44) { None } else { Some(id) };
+            assert_eq!(builtin_id(code), expected, "id {id}");
+        }
+    }
+
+    #[test]
     fn functions() {
         assert_eq!(file_function_name("xlookup").as_deref(), Some("_xlfn.XLOOKUP"));
         assert_eq!(file_function_name("forecast.ets.confint").as_deref(), Some("_xlfn.FORECAST.ETS.CONFINT"));
         assert_eq!(file_function_name("FILTER").as_deref(), Some("_xlfn._xlws.FILTER"));
         assert_eq!(file_function_name("PERCENTOF").as_deref(), Some("_xlfn.PERCENTOF"));
         assert_eq!(file_function_name("TRIMRANGE").as_deref(), Some("_xlfn.TRIMRANGE"));
+        assert_eq!(file_function_name("stockhistory").as_deref(), Some("_xlfn.STOCKHISTORY"));
+        assert_eq!(file_function_name("TRANSLATE").as_deref(), Some("_xlfn.TRANSLATE"));
+        assert_eq!(file_function_name("DETECTLANGUAGE").as_deref(), Some("_xlfn.DETECTLANGUAGE"));
+        assert_eq!(file_function_name("NETWORKDAYS.INTL"), None);
+        assert_eq!(file_function_name("WORKDAY.INTL"), None);
+        // Excel 16.0 build 20527 saves COPILOT as plain `COPILOT(...)` (it does not know the name yet).
+        assert_eq!(file_function_name("COPILOT"), None);
         assert_eq!(file_function_name("SUM"), None);
         assert_eq!(builtin_format(14), Some("m/d/yyyy"));
         assert_eq!(builtin_id("0.00%"), Some(10));
         assert_eq!(builtin_id(builtin_format(5).unwrap()), None);
         assert_eq!(paper_name(9), Some("A4"));
         assert_eq!(paper_id("a4"), Some(9));
+        // 12/13 are the JIS B4/B5 Japanese Excel uses; 42 is ISO B4.
+        assert_eq!(paper_name(12), Some("B4"));
+        assert_eq!(paper_id("b5"), Some(13));
+        assert_eq!(paper_id("B5 (JIS)"), Some(13));
+        assert_eq!(paper_id("B4 (ISO)"), Some(42));
+        // The Japanese papers page setup names.
+        assert_eq!(paper_name(43), Some("Japanese Postcard"));
+        assert_eq!(paper_name(88), Some("B6"));
+        for (name, id) in [
+            ("Japanese Postcard", 43),
+            ("japanese double postcard", 69),
+            ("A6", 70),
+            ("Japanese Envelope Kaku #2", 71),
+            ("kaku #3", 72),
+            ("Japanese Envelope #3", 73),
+            ("chou #4", 74),
+            ("B6 (JIS)", 88),
+        ] {
+            assert_eq!(paper_id(name), Some(id), "{name}");
+        }
+        assert_eq!(paper_id("Napkin"), None);
     }
 }

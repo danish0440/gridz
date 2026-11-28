@@ -4,20 +4,23 @@
 
 Each entry is an Excel ribbon or menu command (feature names only). It counts as implemented when GridZ registers a command with the same id. This measures breadth only; the overall assessment (depth, fidelity, effort) is in [target-app-parity.md](target-app-parity.md).
 
-**Overall: 274 / 290 commands implemented (94.5%).**
+**Overall: 282 / 296 commands implemented (95.3%).**
+
+**Headless ([RFC-0052](https://github.com/storytold/craft-contrib/blob/main/rfcs/0052-headless-reach.md)): 282 yes, 14 no (window 0, os 10, engine-gap 4), 0 partial, 0 unknown.** An implemented command is `headless: yes`: it is in the engine registry that `gridz-cli` and the MCP server load. A missing one carries its hand mark from `HEADLESS` in `xtask/src/parity.rs`, or `unknown`.
 
 | Tab | Implemented | Total | Parity |
 |---|---|---|---|
 | File | 11 | 11 | 100% |
 | Home | 94 | 94 | 100% |
-| Insert | 17 | 25 | 68% |
+| Insert | 19 | 25 | 76% |
 | Draw | 4 | 4 | 100% |
 | Page Layout | 23 | 23 | 100% |
 | Formulas | 23 | 23 | 100% |
 | Data | 23 | 28 | 82% |
 | Review | 15 | 18 | 83% |
-| View | 20 | 20 | 100% |
-| Automate | 3 | 3 | 100% |
+| View | 21 | 21 | 100% |
+| Automate | 4 | 4 | 100% |
+| Developer | 4 | 4 | 100% |
 | Table Design | 13 | 13 | 100% |
 | Chart Design | 8 | 8 | 100% |
 | Format | 3 | 3 | 100% |
@@ -139,7 +142,7 @@ Implemented:
 - `edit.goToSpecial` Go To Special (Editing)
 - `home.addIns` Add-ins (Add-ins)
 
-## Insert (17 / 25, 68%)
+## Insert (19 / 25, 76%)
 
 Implemented:
 
@@ -158,19 +161,19 @@ Implemented:
 - `review.newComment` Comment (Comments)
 - `insert.textBox` Text Box (Text)
 - `pageLayout.headerFooter` Header & Footer (Text)
+- `insert.wordArt` Decorative Text (Text)
+- `insert.equation` Equation (Symbols)
 - `insert.symbol` Symbol (Symbols)
 - `insert.checkbox` Checkbox (Cell Controls)
 
 Missing:
 
-- `insert.smartArt` SmartArt (Illustrations)
-- `insert.screenshot` Screenshot (Illustrations)
-- `insert.map` Maps (Charts)
-- `insert.timeline` Timeline (Filters)
-- `insert.wordArt` WordArt (Text)
-- `insert.signatureLine` Signature Line (Text)
-- `insert.object` Object (Text)
-- `insert.equation` Equation (Symbols)
+- `insert.smartArt` Diagram (Illustrations): headless: no, reach: engine-gap (diagrams could be built by a command)
+- `insert.screenshot` Screenshot (Illustrations): headless: no, reach: os (screen capture of other windows)
+- `insert.map` Maps (Charts): headless: no, reach: os (online map service)
+- `insert.timeline` Timeline (Filters): headless: no, reach: engine-gap (a date filter for pivot tables could be a command)
+- `insert.signatureLine` Signature Line (Text): headless: no, reach: engine-gap (a signature line object could be inserted by a command)
+- `insert.object` Object (Text): headless: no, reach: os (embedding another program's object)
 
 ## Draw (4 / 4, 100%)
 
@@ -267,11 +270,11 @@ Implemented:
 
 Missing:
 
-- `data.fromWeb` From Web (Get & Transform Data)
-- `data.stocks` Stocks (Data Types)
-- `data.geography` Geography (Data Types)
-- `data.relationships` Relationships (Data Tools)
-- `data.analyzeData` Analyze Data (Analysis)
+- `data.fromWeb` From Web (Get & Transform Data): headless: no, reach: os (fetching a web page)
+- `data.stocks` Stocks (Data Types): headless: no, reach: os (online stock data service)
+- `data.geography` Geography (Data Types): headless: no, reach: os (online geography data service)
+- `data.relationships` Relationships (Data Tools): headless: no, reach: engine-gap (data-model relationships could be commands)
+- `data.analyzeData` Analyze Data (Analysis): headless: no, reach: os (online analysis service)
 
 ## Review (15 / 18, 83%)
 
@@ -295,11 +298,11 @@ Implemented:
 
 Missing:
 
-- `review.smartLookup` Smart Lookup (Insights)
-- `review.translate` Translate (Language)
-- `review.showChanges` Show Changes (Changes)
+- `review.smartLookup` Smart Lookup (Insights): headless: no, reach: os (online search service)
+- `review.translate` Translate (Language): headless: no, reach: os (online translation service)
+- `review.showChanges` Show Changes (Changes): headless: no, reach: os (co-authoring change history service)
 
-## View (20 / 20, 100%)
+## View (21 / 21, 100%)
 
 Implemented:
 
@@ -323,14 +326,25 @@ Implemented:
 - `view.unhideWindow` Unhide (Window)
 - `view.switchWindows` Switch Windows (Window)
 - `view.macros` Macros (Macros)
+- `macro.record` Record Macro (Macros)
 
-## Automate (3 / 3, 100%)
+## Automate (4 / 4, 100%)
 
 Implemented:
 
 - `automate.newScript` New Script (Scripting Tools)
 - `automate.allScripts` All Scripts (Scripting Tools)
 - `automate.recordActions` Record Actions (Scripting Tools)
+- `automate.trustScripts` Trust Scripts (Scripting Tools)
+
+## Developer (4 / 4, 100%)
+
+Implemented:
+
+- `insert.button` Button (Form Control) (Controls)
+- `insert.spinButton` Spin Button (Form Control) (Controls)
+- `insert.slider` Scroll Bar (Form Control) (Controls)
+- `control.format` Properties (Controls)
 
 ## Table Design (13 / 13, 100%)
 

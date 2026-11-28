@@ -1,10 +1,13 @@
 //! View tab (sheet view state that's saved with the file) and Page Layout settings.
 
-use gridz_core::{CellRef, RangeRef};
-use gridz_model::Orientation;
+use gridz_core::RangeRef;
+use gridz_model::{Orientation, Workbook};
 use serde_json::{Value as Json, json};
 
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, bool_param, cell_param, cell_param_on, cmd, edit, f64_param, has_doc, str_param,
+    target_range, target_sheet, u32_param,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -13,29 +16,78 @@ pub fn specs() -> Vec<CommandSpec> {
             "Freeze Panes",
             ["View", "Window", "Freeze Panes"],
             None,
-            "{cell?: \"B2\" (rows above and columns left of it freeze)}",
+            "{sheet?, cell?: \"B2\" (rows above and columns left of it freeze); without `cell`, unfreezes a frozen sheet}",
             has_doc,
             freeze_panes
         ),
-        cmd!("view.freezeTopRow", "Freeze Top Row", ["View", "Window", "Freeze Panes"], None, "{}", has_doc, |s, _| set_freeze(s, Some((1, 0)))),
-        cmd!("view.freezeFirstColumn", "Freeze First Column", ["View", "Window", "Freeze Panes"], None, "{}", has_doc, |s, _| set_freeze(
+        cmd!("view.freezeTopRow", "Freeze Top Row", ["View", "Window", "Freeze Panes"], None, "{sheet?}", has_doc, |s, p| set_freeze(
             s,
+            target_sheet(s, p)?,
+            Some((1, 0))
+        )),
+        cmd!("view.freezeFirstColumn", "Freeze First Column", ["View", "Window", "Freeze Panes"], None, "{sheet?}", has_doc, |s, p| set_freeze(
+            s,
+            target_sheet(s, p)?,
             Some((0, 1))
         )),
-        cmd!("view.unfreezePanes", "Unfreeze Panes", ["View", "Window", "Freeze Panes"], None, "{}", has_doc, |s, _| set_freeze(s, None)),
+        cmd!("view.unfreezePanes", "Unfreeze Panes", ["View", "Window", "Freeze Panes"], None, "{sheet?}", has_doc, |s, p| set_freeze(
+            s,
+            target_sheet(s, p)?,
+            None
+        )),
         cmd!("view.gridlines", "Gridlines", ["View", "Show"], None, "{on?}", has_doc, |s, p| sheet_flag(s, p, "gridlines")),
         cmd!("view.headings", "Headings", ["View", "Show"], None, "{on?}", has_doc, |s, p| sheet_flag(s, p, "headings")),
         cmd!("view.showZeros", "Show Zeros", [], None, "{on?}", has_doc, |s, p| sheet_flag(s, p, "zeros")),
+        cmd!("view.showOutlineSymbols", "Show Outline Symbols", [], Some("Ctrl+8"), "{on?}", has_doc, |s, p| sheet_flag(s, p, "outlineSymbols")),
+        cmd!("view.showObjects", "Show Objects", [], Some("Ctrl+6"), "{on?}", has_doc, show_objects),
+        cmd!(
+            "view.showSheetTabs",
+            "Show Sheet Tabs",
+            [],
+            None,
+            "{on?} (File › Options › Advanced, this workbook; toggles without `on`)",
+            has_doc,
+            |s, p| { workbook_view_flag(s, p, "sheetTabs") }
+        ),
+        cmd!(
+            "view.showHorizontalScrollBar",
+            "Show Horizontal Scroll Bar",
+            [],
+            None,
+            "{on?} (this workbook; toggles without `on`)",
+            has_doc,
+            |s, p| { workbook_view_flag(s, p, "horizontal") }
+        ),
+        cmd!("view.showVerticalScrollBar", "Show Vertical Scroll Bar", [], None, "{on?} (this workbook; toggles without `on`)", has_doc, |s, p| {
+            workbook_view_flag(s, p, "vertical")
+        }),
         cmd!("view.rightToLeft", "Sheet Right-to-Left", ["Page Layout", "Sheet Options"], None, "{on?}", has_doc, |s, p| sheet_flag(s, p, "rtl")),
-        cmd!("view.zoom", "Zoom", ["View", "Zoom"], None, "{percent: 10..400}", has_doc, zoom),
-        cmd!("view.zoom100", "100%", ["View", "Zoom"], None, "{}", has_doc, |s, _| zoom(s, &json!({"percent": 100}))),
+        cmd!(noundo "view.zoom", "Zoom", ["View", "Zoom"], None, "{percent: 10..400}", has_doc, zoom),
+        cmd!(noundo "view.zoom100", "100%", ["View", "Zoom"], None, "{}", has_doc, |s, _| zoom(s, &json!({"percent": 100}))),
         cmd!(query "view.formulaBar", "Formula Bar", ["View", "Show"], None, "{on?: bool}", always, |s, p| {
             s.prefs.formula_bar = bool_param(p, "on").unwrap_or(!s.prefs.formula_bar);
             Ok(json!({"on": s.prefs.formula_bar}))
         }),
-        cmd!("view.zoomToSelection", "Zoom to Selection", ["View", "Zoom"], None, "{viewWidth?, viewHeight?}", has_doc, zoom_selection),
+        cmd!(
+            query "view.statusBar",
+            "Customize Status Bar",
+            [],
+            None,
+            "{average?, count?, numericalCount?, minimum?, maximum?, sum?: bool (the statistics shown for a selection; returns all six)}",
+            always,
+            status_bar
+        ),
+        cmd!(noundo "view.zoomToSelection", "Zoom to Selection", ["View", "Zoom"], None, "{viewWidth?, viewHeight?}", has_doc, zoom_selection),
         cmd!("pageLayout.orientation", "Orientation", ["Page Layout", "Page Setup"], None, "{orientation: portrait|landscape}", has_doc, orientation),
-        cmd!("pageLayout.size", "Size", ["Page Layout", "Page Setup"], None, "{paper: Letter|Legal|A4|A3|A5|Tabloid|Executive}", has_doc, paper),
+        cmd!(
+            "pageLayout.size",
+            "Size",
+            ["Page Layout", "Page Setup"],
+            None,
+            "{paper: Letter|Legal|A4|A3|A5|A6|Tabloid|Executive|Ledger|B4|B5|B6|B4 (ISO)|B5 (ISO)|B6 (ISO)|Japanese Postcard|Japanese Double Postcard|Japanese Envelope #3|Japanese Envelope #4|Japanese Envelope Kaku #2|Japanese Envelope Kaku #3|Statement|Envelope #10|Envelope DL (B4/B5/B6 are the JIS sizes)}",
+            has_doc,
+            paper
+        ),
         cmd!(
             "pageLayout.margins",
             "Margins",
@@ -96,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Header & Footer",
             ["Insert", "Text"],
             None,
-            "{sheet?, header?: \"&C&P\", footer?: \"&CPage &P of &N\", differentFirst?: bool, differentOddEven?: bool, firstHeader?, firstFooter?, evenHeader?, evenFooter?} or one section: {sheet?, page?: odd|even|first, part: header|footer, section: left|center|right, text: \"Page &[Page] of &[Pages]\"} (field names or codes) → {header, footer, differentFirst, differentOddEven, firstHeader, firstFooter, evenHeader, evenFooter}",
+            "{sheet?, header?: \"&C&P\", footer?: \"&CPage &P of &N\", differentFirst?: bool, differentOddEven?: bool, scaleWithDoc?: bool, alignWithMargins?: bool, firstHeader?, firstFooter?, evenHeader?, evenFooter?} or one section: {sheet?, page?: odd|even|first, part: header|footer, section: left|center|right, text: \"Page &[Page] of &[Pages]\"} (field names or codes) → {header, footer, differentFirst, differentOddEven, scaleWithDoc, alignWithMargins, firstHeader, firstFooter, evenHeader, evenFooter}",
             has_doc,
             header_footer
         ),
@@ -113,23 +165,28 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn freeze_panes(s: &mut Session, p: &Json) -> Result<Json> {
+    let si = target_sheet(s, p)?;
     let d = s.doc()?;
-    let sh = d.wb.active().ok_or(EngineError::NoDocument)?;
+    let sh = d.wb.sheet(si).ok_or(EngineError::NoDocument)?;
     if sh.freeze.is_some() && p.get("cell").is_none() {
-        return set_freeze(s, None);
+        return set_freeze(s, si, None);
     }
-    let at = cell_param(s, p, "cell")?.unwrap_or(d.selection.active);
+    let at = match cell_param_on(s, p, "cell", si)? {
+        Some(c) => c,
+        None if si == d.wb.active_sheet() => d.selection.active,
+        // The selection belongs to the active sheet.
+        None => return Err(bad("view.freezePanes", "missing `cell`: the selection is on the active sheet")),
+    };
     let top = sh.view_top_left;
     let rows = at.row.saturating_sub(top.row);
     let cols = at.col.saturating_sub(top.col);
     let _ = (rows, cols);
     let (rows, cols) = (at.row, at.col);
-    set_freeze(s, if rows == 0 && cols == 0 { None } else { Some((rows, cols)) })
+    set_freeze(s, si, if rows == 0 && cols == 0 { None } else { Some((rows, cols)) })
 }
 
-fn set_freeze(s: &mut Session, f: Option<(u32, u32)>) -> Result<Json> {
+fn set_freeze(s: &mut Session, si: usize, f: Option<(u32, u32)>) -> Result<Json> {
     edit(s, |cx| {
-        let si = cx.sheet_index();
         cx.sheet_mut(si)?.freeze = f;
         Ok(json!({"freeze": f}))
     })
@@ -143,6 +200,7 @@ fn sheet_flag(s: &mut Session, p: &Json, which: &str) -> Result<Json> {
             "gridlines" => &mut sh.show_gridlines,
             "headings" => &mut sh.show_headings,
             "zeros" => &mut sh.show_zeros,
+            "outlineSymbols" => &mut sh.show_outline_symbols,
             "rtl" => &mut sh.right_to_left,
             "printGridlines" => &mut sh.print.gridlines,
             _ => &mut sh.print.headings,
@@ -152,12 +210,61 @@ fn sheet_flag(s: &mut Session, p: &Json, which: &str) -> Result<Json> {
     })
 }
 
+/// File › Options › Advanced › Display options for this workbook: the sheet tabs and the two
+/// scroll bars, saved with the workbook (`<workbookView showSheetTabs … />`).
+fn workbook_view_flag(s: &mut Session, p: &Json, which: &str) -> Result<Json> {
+    edit(s, |cx| {
+        let view = &mut cx.wb.view;
+        let slot = match which {
+            "sheetTabs" => &mut view.show_sheet_tabs,
+            "horizontal" => &mut view.show_horizontal_scroll,
+            _ => &mut view.show_vertical_scroll,
+        };
+        *slot = bool_param(p, "on").unwrap_or(!*slot);
+        Ok(json!({"on": *slot}))
+    })
+}
+
+/// Ctrl+6: hides every object, or shows them again. Placeholders (from a file) count as shown.
+fn show_objects(s: &mut Session, p: &Json) -> Result<Json> {
+    use gridz_model::ShowObjects;
+    edit(s, |cx| {
+        let on = bool_param(p, "on").unwrap_or(cx.wb.show_objects == ShowObjects::None);
+        cx.wb.show_objects = if on { ShowObjects::All } else { ShowObjects::None };
+        Ok(json!({"on": on}))
+    })
+}
+
+fn status_bar(s: &mut Session, p: &Json) -> Result<Json> {
+    let st = &mut s.prefs.status_bar;
+    for (key, flag) in [
+        ("average", &mut st.average),
+        ("count", &mut st.count),
+        ("numericalCount", &mut st.numerical_count),
+        ("minimum", &mut st.minimum),
+        ("maximum", &mut st.maximum),
+        ("sum", &mut st.sum),
+    ] {
+        if let Some(on) = bool_param(p, key) {
+            *flag = on;
+        }
+    }
+    Ok(json!({
+        "average": st.average,
+        "count": st.count,
+        "numericalCount": st.numerical_count,
+        "minimum": st.minimum,
+        "maximum": st.maximum,
+        "sum": st.sum,
+    }))
+}
+
 fn zoom(s: &mut Session, p: &Json) -> Result<Json> {
     let z = f64_param(p, "percent").ok_or_else(|| bad("view.zoom", "missing `percent`"))?.clamp(10.0, 400.0) as u16;
     let d = s.doc_mut()?;
     let dirty = d.is_dirty();
     let wb = std::sync::Arc::make_mut(&mut d.wb);
-    let si = wb.active_sheet;
+    let si = wb.active_sheet();
     if let Some(sh) = wb.sheet_mut(si) {
         sh.zoom = z;
     }
@@ -165,6 +272,34 @@ fn zoom(s: &mut Session, p: &Json) -> Result<Json> {
         d.saved = d.wb.clone();
     }
     Ok(json!({"zoom": z}))
+}
+
+/// Zoom belongs to the window, not to the edits (Excel doesn't undo it, #2313): undo and redo keep
+/// each sheet's current zoom when they swap in another snapshot of the workbook. Back at the saved
+/// state, the zoom alone doesn't make the workbook dirty, as with `view.zoom`.
+pub(crate) fn keep_zoom(d: &mut crate::DocState, now: &Workbook) {
+    // Sheets have no stable id. A name missing from `now` is a rename being undone or redone, which
+    // keeps the sheet count and position: the sheet is the one at the same index, under a name the
+    // restored snapshot doesn't have.
+    let renamed = |i: usize| {
+        (now.sheets.len() == d.wb.sheets.len()).then(|| now.sheets.get(i)).flatten().filter(|sh| !d.wb.sheets.iter().any(|s| s.name == sh.name))
+    };
+    let current = |i: usize, name: &str| now.sheets.iter().find(|sh| sh.name == name).or_else(|| renamed(i)).map(|sh| sh.zoom);
+    let changed: Vec<(usize, u16)> =
+        d.wb.sheets.iter().enumerate().filter_map(|(i, sh)| current(i, &sh.name).filter(|z| *z != sh.zoom).map(|z| (i, z))).collect();
+    if changed.is_empty() {
+        return;
+    }
+    let saved = std::sync::Arc::ptr_eq(&d.wb, &d.saved);
+    let wb = std::sync::Arc::make_mut(&mut d.wb);
+    for (i, z) in changed {
+        if let Some(sh) = wb.sheet_mut(i) {
+            sh.zoom = z;
+        }
+    }
+    if saved {
+        d.saved = d.wb.clone();
+    }
 }
 
 fn zoom_selection(s: &mut Session, p: &Json) -> Result<Json> {
@@ -189,7 +324,9 @@ fn orientation(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn paper(s: &mut Session, p: &Json) -> Result<Json> {
-    let paper = str_param(p, "paper").unwrap_or("Letter").to_string();
+    // A known paper is stored under its table name; any other name is kept (it prints on Letter).
+    let name = str_param(p, "paper").unwrap_or("Letter");
+    let paper = gridz_model::paper::canonical(name).unwrap_or(name).to_string();
     edit(s, |cx| {
         let si = cx.sheet_index();
         cx.sheet_mut(si)?.print.paper = paper.clone();
@@ -232,13 +369,31 @@ fn print_area(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn print_titles(s: &mut Session, p: &Json) -> Result<Json> {
-    let rows = str_param(p, "rows").and_then(RangeRef::parse).map(|r| (r.start.row, r.end.row));
-    let cols = str_param(p, "cols").and_then(RangeRef::parse).map(|r| (r.start.col, r.end.col));
+    // An absent key leaves that axis alone, and an empty or null value clears it — the same
+    // reading `pageLayout.pageSetup` gives `titleRows`/`titleCols`. Assigning `None` for a
+    // key that was never sent used to wipe the other axis.
+    let axis = |key: &str, is_cols: bool| -> Result<Option<Option<(u32, u32)>>> {
+        match p.get(key) {
+            None => Ok(None),
+            Some(Json::Null) => Ok(Some(None)),
+            Some(Json::String(t)) if t.trim().is_empty() => Ok(Some(None)),
+            Some(Json::String(t)) => match RangeRef::parse(t) {
+                Some(r) => Ok(Some(Some(if is_cols { (r.start.col, r.end.col) } else { (r.start.row, r.end.row) }))),
+                None => Err(bad("pageLayout.printTitles", format!("`{key}` is not a range: `{t}`"))),
+            },
+            Some(_) => Err(bad("pageLayout.printTitles", format!("`{key}` must be text like \"1:2\" or \"A:A\""))),
+        }
+    };
+    let (rows, cols) = (axis("rows", false)?, axis("cols", true)?);
     edit(s, |cx| {
         let si = cx.sheet_index();
         let pr = &mut cx.sheet_mut(si)?.print;
-        pr.title_rows = rows;
-        pr.title_cols = cols;
+        if let Some(t) = rows {
+            pr.title_rows = t;
+        }
+        if let Some(t) = cols {
+            pr.title_cols = t;
+        }
         Ok(Json::Null)
     })
 }
@@ -339,6 +494,12 @@ fn header_footer(s: &mut Session, p: &Json) -> Result<Json> {
         if let Some(on) = bool_param(p, "differentOddEven") {
             pr.different_odd_even = on;
         }
+        if let Some(on) = bool_param(p, "scaleWithDoc") {
+            pr.hf_scale_with_doc = on;
+        }
+        if let Some(on) = bool_param(p, "alignWithMargins") {
+            pr.hf_align_with_margins = on;
+        }
         if let Some((page, footer, idx, text)) = &section {
             let spec = pr.hf_mut(*page, *footer);
             let mut parts = super::print::split_header_footer(spec);
@@ -352,6 +513,8 @@ fn header_footer(s: &mut Session, p: &Json) -> Result<Json> {
             "footer": pr.footer,
             "differentFirst": pr.different_first,
             "differentOddEven": pr.different_odd_even,
+            "scaleWithDoc": pr.hf_scale_with_doc,
+            "alignWithMargins": pr.hf_align_with_margins,
             "firstHeader": pr.first_header,
             "firstFooter": pr.first_footer,
             "evenHeader": pr.even_header,
@@ -399,12 +562,10 @@ fn theme(s: &mut Session, p: &Json) -> Result<Json> {
     })
 }
 
-#[allow(dead_code)]
-fn unused(_: CellRef) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gridz_core::CellRef;
 
     #[test]
     fn zoom_100_resets_the_active_sheet_zoom() {
@@ -416,6 +577,94 @@ mod tests {
     }
 
     #[test]
+    fn zooming_is_not_an_undo_step() {
+        // Excel keeps zoom on the window, not in the edit history (#2313): wheel, slider, dialog,
+        // 100% and Zoom to Selection leave Undo and Redo alone.
+        let mut s = Session::new();
+        s.new_workbook();
+        s.execute("cell.set", json!({"cell": "A1", "input": "x"})).unwrap();
+        s.execute("cell.set", json!({"cell": "A2", "input": "y"})).unwrap();
+        s.execute("edit.undo", json!({})).unwrap();
+        let (undo, redo) = s.doc().map(|d| (d.undo.len(), d.redo.len())).unwrap();
+        for (id, params, zoom) in [
+            ("view.zoom", json!({"percent": 150}), 150),
+            ("view.zoomToSelection", json!({"viewWidth": 1200, "viewHeight": 700}), 400),
+            ("view.zoom100", json!({}), 100),
+        ] {
+            s.execute(id, params).unwrap();
+            let d = s.doc().unwrap();
+            assert_eq!(d.wb.active().unwrap().zoom, zoom, "{id}");
+            assert_eq!((d.undo.len(), d.redo.len()), (undo, redo), "{id} touched the history");
+        }
+        let a1 = CellRef::parse("A1").unwrap();
+        s.execute("edit.undo", json!({})).unwrap();
+        assert!(s.doc().unwrap().wb.active().unwrap().value(a1).is_empty(), "Ctrl+Z after zooming undoes the last edit");
+    }
+
+    #[test]
+    fn undo_and_redo_keep_the_current_zoom() {
+        let mut s = Session::new();
+        s.new_workbook();
+        let zoom = |s: &Session| s.doc().unwrap().wb.active().unwrap().zoom;
+        s.execute("cell.set", json!({"cell": "A1", "input": "x"})).unwrap();
+        s.execute("view.zoom", json!({"percent": 200})).unwrap();
+        s.execute("edit.undo", json!({})).unwrap();
+        assert!(s.doc().unwrap().wb.active().unwrap().value(CellRef::parse("A1").unwrap()).is_empty());
+        assert_eq!(zoom(&s), 200, "undo keeps the zoom");
+        // Back at the state on disk: the zoom alone doesn't make the workbook dirty, as in `zoom`.
+        assert!(!s.doc().unwrap().is_dirty());
+        s.execute("view.zoom", json!({"percent": 50})).unwrap();
+        s.execute("edit.redo", json!({})).unwrap();
+        assert!(!s.doc().unwrap().wb.active().unwrap().value(CellRef::parse("A1").unwrap()).is_empty());
+        assert_eq!(zoom(&s), 50, "redo keeps the zoom");
+    }
+
+    #[test]
+    fn undoing_a_rename_keeps_the_current_zoom() {
+        let mut s = Session::new();
+        s.new_workbook();
+        let active = |s: &Session| {
+            let sh = s.doc().unwrap().wb.active().unwrap();
+            (sh.name.clone(), sh.zoom)
+        };
+        let before = active(&s).0;
+        s.execute("sheet.rename", json!({"name": "Data"})).unwrap();
+        s.execute("view.zoom", json!({"percent": 150})).unwrap();
+        s.execute("edit.undo", json!({})).unwrap();
+        assert_eq!(active(&s), (before, 150), "undoing the rename keeps the zoom");
+        s.execute("view.zoom", json!({"percent": 75})).unwrap();
+        s.execute("edit.redo", json!({})).unwrap();
+        assert_eq!(active(&s), ("Data".to_string(), 75), "redoing the rename keeps the zoom");
+    }
+
+    #[test]
+    fn undoing_several_steps_keeps_each_sheet_its_own_zoom() {
+        // Adding C then deleting B leaves as many sheets as before under other names: across both
+        // steps at once, that looks like B renamed to C, and C's zoom used to land on B.
+        let mut s = Session::new();
+        s.new_workbook();
+        let zoom = |s: &Session, name: &str| {
+            let wb = &s.doc().unwrap().wb;
+            wb.sheet(wb.sheet_index(name).unwrap()).unwrap().zoom
+        };
+        let names = |s: &Session| s.doc().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect::<Vec<_>>();
+        let first = names(&s)[0].clone();
+        s.execute("home.insertSheet", json!({"name": "B", "before": 1})).unwrap();
+        s.execute("home.insertSheet", json!({"name": "C", "before": 2})).unwrap();
+        s.execute("home.deleteSheet", json!({"sheet": "B"})).unwrap();
+        s.execute("sheet.activate", json!({"sheet": "C"})).unwrap();
+        s.execute("view.zoom", json!({"percent": 150})).unwrap();
+        s.execute("edit.undo", json!({"steps": 2})).unwrap();
+        assert_eq!(names(&s), [first.clone(), "B".to_string()]);
+        assert_eq!(zoom(&s, "B"), 100, "B never had C's zoom");
+        s.execute("sheet.activate", json!({"sheet": "B"})).unwrap();
+        s.execute("view.zoom", json!({"percent": 80})).unwrap();
+        s.execute("edit.redo", json!({"steps": 2})).unwrap();
+        assert_eq!(names(&s), [first, "C".to_string()]);
+        assert_eq!(zoom(&s, "C"), 150, "C gets its own zoom back, not B's");
+    }
+
+    #[test]
     fn formula_bar_toggles_without_a_workbook_and_defaults_to_shown() {
         let mut s = Session::new();
         assert!(s.prefs.formula_bar);
@@ -424,5 +673,23 @@ mod tests {
         // A prefs.json saved before the option existed keeps the formula bar shown.
         let old: crate::Prefs = serde_json::from_str(r#"{"userName": "Ann"}"#).unwrap();
         assert!(old.formula_bar);
+    }
+
+    #[test]
+    fn status_bar_statistics_default_to_average_count_and_sum_and_turn_on_one_at_a_time() {
+        let mut s = Session::new();
+        let all = json!({"average": true, "count": true, "numericalCount": false, "minimum": false, "maximum": false, "sum": true});
+        assert_eq!(s.execute("view.statusBar", json!({})).unwrap(), all);
+        let r = s.execute("view.statusBar", json!({"minimum": true, "sum": false, "count": "yes"})).unwrap();
+        assert_eq!(r, json!({"average": true, "count": true, "numericalCount": false, "minimum": true, "maximum": false, "sum": false}));
+        assert!(s.prefs.status_bar.minimum && !s.prefs.status_bar.sum);
+        // A prefs.json saved before the option existed, or with only some of the six, keeps the defaults for the rest.
+        let old: crate::Prefs = serde_json::from_str(r#"{"userName": "Ann"}"#).unwrap();
+        assert_eq!(old.status_bar, crate::StatusBarStats::default());
+        let part: crate::Prefs = serde_json::from_str(r#"{"statusBar": {"maximum": true}}"#).unwrap();
+        assert!(part.status_bar.maximum && part.status_bar.average && part.status_bar.sum && !part.status_bar.minimum);
+        let saved = serde_json::to_value(&s.prefs).unwrap();
+        assert_eq!(saved["statusBar"]["minimum"], true);
+        assert_eq!(saved["statusBar"]["numericalCount"], false);
     }
 }

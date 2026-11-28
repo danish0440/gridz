@@ -119,16 +119,42 @@ pub struct Theme {
     pub colors: [u32; 12],
     pub major_font: String,
     pub minor_font: String,
+    /// The heading font's East Asian typeface (`<a:ea>`); empty when the file did not set one.
+    #[serde(default)]
+    pub major_font_ea: String,
+    /// The body font's East Asian typeface (`<a:ea>`); empty when the file did not set one.
+    #[serde(default)]
+    pub minor_font_ea: String,
+    /// The heading font's complex-script typeface (`<a:cs>`); empty when the file did not set one.
+    #[serde(default)]
+    pub major_font_cs: String,
+    /// The body font's complex-script typeface (`<a:cs>`); empty when the file did not set one.
+    #[serde(default)]
+    pub minor_font_cs: String,
+    /// The heading font's per-script typefaces (`<a:font script="Arab" typeface="…"/>`), as
+    /// (script, typeface) in file order.
+    #[serde(default)]
+    pub major_font_scripts: Vec<(String, String)>,
+    /// The body font's per-script typefaces, as (script, typeface) in file order.
+    #[serde(default)]
+    pub minor_font_scripts: Vec<(String, String)>,
 }
 
 impl Default for Theme {
-    /// GridZ's own default theme ("Craft"): original palette.
+    /// GridZ's own default theme ("Craft"): original palette. The East Asian and
+    /// complex-script typefaces stay empty: the file did not set one.
     fn default() -> Self {
         Theme {
             name: "Craft".into(),
             colors: [0xFFFFFF, 0x000000, 0xE8E8E8, 0x0E2841, 0x156082, 0xE97132, 0x196B24, 0x0F9ED5, 0xA02B93, 0x4EA72E, 0x467886, 0x96607D],
             major_font: crate::DEFAULT_FONT.into(),
             minor_font: crate::DEFAULT_FONT.into(),
+            major_font_ea: String::new(),
+            minor_font_ea: String::new(),
+            major_font_cs: String::new(),
+            minor_font_cs: String::new(),
+            major_font_scripts: Vec::new(),
+            minor_font_scripts: Vec::new(),
         }
     }
 }
@@ -161,6 +187,25 @@ pub struct Font {
     pub strike: bool,
     pub color: Color,
     pub vert: VertAlign,
+    /// Windows character set the font was chosen for (178 = Arabic); kept so Excel substitutes a font for the same script.
+    #[serde(default)]
+    pub charset: Option<u8>,
+    /// Font family class (1 roman, 2 swiss, 3 modern…); `None` is swiss, the default.
+    #[serde(default)]
+    pub family: Option<u8>,
+    /// The font follows the theme's body font (`<scheme val="minor"/>`) while its face is the
+    /// theme's minor font. Fonts derived from it (bold, a colour, a size) keep the link.
+    #[serde(default = "default_minor")]
+    pub minor: bool,
+    /// Outlined (hollow) letters: an XLSX `<outline/>`. Kept and saved; GridZ does not
+    /// draw it yet (the letters render solid). Always serialized, like the other flags, so a
+    /// whole style sent back through `home.formatCells` (the Format Cells dialog) clears it.
+    #[serde(default)]
+    pub outline: bool,
+}
+
+fn default_minor() -> bool {
+    true
 }
 
 impl Eq for Font {}
@@ -168,7 +213,7 @@ impl Hash for Font {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.name.hash(h);
         self.size.to_bits().hash(h);
-        (self.bold, self.italic, self.underline, self.strike, self.color, self.vert).hash(h);
+        (self.bold, self.italic, self.underline, self.strike, self.color, self.vert, self.charset, self.family, self.minor, self.outline).hash(h);
     }
 }
 
@@ -183,6 +228,10 @@ impl Default for Font {
             strike: false,
             color: Color::Auto,
             vert: VertAlign::Baseline,
+            charset: None,
+            family: None,
+            minor: true,
+            outline: false,
         }
     }
 }
@@ -308,6 +357,14 @@ pub enum VAlign {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ReadingOrder {
+    #[default]
+    Context,
+    LeftToRight,
+    RightToLeft,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Alignment {
     pub h: HAlign,
     pub v: VAlign,
@@ -316,6 +373,20 @@ pub struct Alignment {
     pub indent: u8,
     /// Degrees -90..=90, or 255 for vertical stacked text.
     pub rotation: i16,
+    /// Unspecified inherits in differential styles and uses context for ordinary cells.
+    #[serde(default)]
+    pub reading_order: Option<ReadingOrder>,
+    /// Space between the cell's edges and its text, left, right, top, bottom, in hundredths
+    /// of a point; `None` where the file stated none (the application's own). An OpenDocument
+    /// cell's padding; Excel has none. Not drawn yet.
+    #[serde(default, skip_serializing_if = "Alignment::no_padding")]
+    pub padding: [Option<u16>; 4],
+}
+
+impl Alignment {
+    fn no_padding(p: &[Option<u16>; 4]) -> bool {
+        p.iter().all(Option::is_none)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -339,6 +410,30 @@ pub struct Style {
     /// Number format code; "General" by default.
     pub num_fmt: NumFmt,
     pub protection: Protection,
+    /// Differential formats only.
+    #[serde(default)]
+    pub dxf_stated: DxfStated,
+}
+
+/// The parts a differential format states at a value its `Style` can't tell from unset: a dxf's
+/// default parts are unset, so a bold turned off, a face, a size or a protection that matches the
+/// defaults would otherwise read as nothing. The values are the style's own; this records that
+/// the format states them, and only where they match the defaults, so a format built in the app
+/// and the same format read back from a file stay equal.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DxfStated {
+    pub bold: bool,
+    pub italic: bool,
+    pub strike: bool,
+    /// Outlined letters turned off (`<outline val="0"/>`). Defaulted so JSON saved before it opens.
+    #[serde(default)]
+    pub outline: bool,
+    pub underline: bool,
+    pub size: bool,
+    pub name: bool,
+    /// `<scheme val>`: the theme font the face follows (`major`, `minor` or `none`).
+    pub scheme: Option<String>,
+    pub protection: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -425,6 +520,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reading_order_defaults_for_older_json_and_distinguishes_styles() {
+        let align: Alignment = serde_json::from_str(r#"{"h":"General","v":"Bottom","wrap":false,"shrink":false,"indent":0,"rotation":0}"#).unwrap();
+        assert_eq!(align.reading_order, None);
+        let mut styles = StyleTable::default();
+        let context = styles.derive(StyleId::DEFAULT, |s| s.align.reading_order = Some(ReadingOrder::Context));
+        let ltr = styles.derive(StyleId::DEFAULT, |s| s.align.reading_order = Some(ReadingOrder::LeftToRight));
+        let rtl = styles.derive(StyleId::DEFAULT, |s| s.align.reading_order = Some(ReadingOrder::RightToLeft));
+        assert_ne!(ltr, rtl);
+        assert_ne!(context, StyleId::DEFAULT);
+        assert_ne!(context, ltr);
+        assert_ne!(context, rtl);
+        assert_ne!(ltr, StyleId::DEFAULT);
+        assert_ne!(rtl, StyleId::DEFAULT);
+        assert_eq!(styles.derive(ltr, |s| s.align.reading_order = Some(ReadingOrder::RightToLeft)), rtl);
+        assert_eq!(styles.derive(rtl, |s| s.align.reading_order = Some(ReadingOrder::Context)), context);
+        assert_eq!(styles.derive(context, |s| s.align.reading_order = None), StyleId::DEFAULT);
+    }
+
+    #[test]
     fn interning() {
         let mut t = StyleTable::default();
         let bold = t.derive(StyleId::DEFAULT, |s| s.font.bold = true);
@@ -435,13 +549,90 @@ mod tests {
         assert!(!t.get(StyleId(999)).font.bold);
     }
 
+    /// Two fonts differing only in outlined letters are different styles; JSON states the flag
+    /// even when off, and JSON saved before it existed reads as not outlined.
     #[test]
-    fn colors() {
+    fn outline_makes_a_distinct_style() -> Result<(), Box<dyn std::error::Error>> {
+        let mut t = StyleTable::default();
+        let outlined = t.derive(StyleId::DEFAULT, |s| s.font.outline = true);
+        assert_ne!(outlined, StyleId::DEFAULT);
+        assert_ne!(Font { outline: true, ..Font::default() }, Font::default());
+        assert_eq!(t.derive(outlined, |s| s.font.outline = false), StyleId::DEFAULT);
+        let mut json = serde_json::to_value(Font::default())?;
+        assert_eq!(json.get("outline"), Some(&serde_json::Value::Bool(false)));
+        assert!(json.as_object_mut().ok_or("none")?.remove("outline").is_some());
+        assert_eq!(serde_json::from_value::<Font>(json)?, Font::default());
+        let on = serde_json::to_value(Font { outline: true, ..Font::default() })?;
+        assert_eq!(on.get("outline"), Some(&serde_json::Value::Bool(true)));
+        let mut stated = serde_json::to_value(DxfStated::default())?;
+        assert!(stated.as_object_mut().ok_or("none")?.remove("outline").is_some());
+        assert_eq!(serde_json::from_value::<DxfStated>(stated)?, DxfStated::default());
+        Ok(())
+    }
+
+    #[test]
+    fn padding_keeps_styles_apart_and_survives_json() -> Result<(), Box<dyn std::error::Error>> {
+        let mut t = StyleTable::default();
+        let padded = t.derive(StyleId::DEFAULT, |s| s.align.padding = [Some(10), None, Some(0), Some(65535)]);
+        let other = t.derive(StyleId::DEFAULT, |s| s.align.padding = [Some(10), None, Some(0), Some(1)]);
+        assert_ne!(padded, StyleId::DEFAULT);
+        assert_ne!(padded, other);
+        assert_eq!(t.derive(StyleId::DEFAULT, |s| s.align.padding = [Some(10), None, Some(0), Some(65535)]), padded);
+        assert_eq!(t.derive(padded, |s| s.align.padding = [None; 4]), StyleId::DEFAULT);
+
+        let style = t.get(padded).clone();
+        let json = serde_json::to_string(&style)?;
+        assert!(json.contains("padding"), "{json}");
+        assert_eq!(serde_json::from_str::<Style>(&json)?, style);
+
+        // No padding: nothing written, and JSON written before the field existed still reads.
+        let plain = serde_json::to_string(&Alignment::default())?;
+        assert!(!plain.contains("padding"), "{plain}");
+        assert_eq!(serde_json::from_str::<Alignment>(&plain)?, Alignment::default());
+        Ok(())
+    }
+
+    #[test]
+    fn a_theme_saved_before_per_script_fonts_still_opens() -> Result<(), Box<dyn std::error::Error>> {
+        let mut json = serde_json::to_value(Theme::default())?;
+        let fields = json.as_object_mut().ok_or("none")?;
+        assert!(fields.remove("major_font_scripts").is_some() && fields.remove("minor_font_scripts").is_some());
+        assert_eq!(serde_json::from_value::<Theme>(json)?, Theme::default());
+        Ok(())
+    }
+
+    #[test]
+    fn colors() -> Result<(), Box<dyn std::error::Error>> {
         let th = Theme::default();
-        assert_eq!(Color::from_hex("#FF0000").unwrap().resolve(&th), Some([255, 0, 0]));
-        assert_eq!(Color::from_hex("FF00FF00").unwrap().resolve(&th), Some([0, 255, 0]));
+        assert_eq!(Color::from_hex("#FF0000").ok_or("none")?.resolve(&th), Some([255, 0, 0]));
+        assert_eq!(Color::from_hex("FF00FF00").ok_or("none")?.resolve(&th), Some([0, 255, 0]));
         assert_eq!(Color::Theme(0, -500).resolve(&th), Some([128, 128, 128]));
         assert_eq!(Color::Theme(1, 500).resolve(&th), Some([128, 128, 128]));
         assert_eq!(Color::Auto.resolve(&th), None);
+        Ok(())
+    }
+
+    #[test]
+    fn theme_json_keeps_ea_and_cs_and_reads_old_json() -> Result<(), Box<dyn std::error::Error>> {
+        // JSON written before the ea/cs fields existed still deserializes (`serde(default)`).
+        let mut old = serde_json::to_value(Theme::default())?;
+        let obj = old.as_object_mut().ok_or("none")?;
+        for key in ["major_font_ea", "minor_font_ea", "major_font_cs", "minor_font_cs"] {
+            assert!(obj.remove(key).is_some(), "the default theme serializes {key}");
+        }
+        assert_eq!(serde_json::from_value::<Theme>(old)?, Theme::default());
+
+        // Set fields serialize and come back.
+        let t = Theme {
+            major_font_ea: "游ゴシック".into(),
+            minor_font_ea: "ＭＳ Ｐゴシック".into(),
+            major_font_cs: "Arial".into(),
+            minor_font_cs: "Times New Roman".into(),
+            ..Theme::default()
+        };
+        let json = serde_json::to_string(&t)?;
+        assert!(json.contains("major_font_ea") && json.contains("游ゴシック"), "{json}");
+        assert_eq!(serde_json::from_str::<Theme>(&json)?, t);
+        Ok(())
     }
 }
